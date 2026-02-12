@@ -1,0 +1,133 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="max-w-5xl mx-auto p-6">
+  <h1 class="text-2xl font-bold mb-6">จัดการ Dimensions</h1>
+
+  {% if messages %}
+  <div class="mb-4">
+    {% for message in messages %}
+    <div class="p-3 rounded bg-green-100 text-green-800">{{ message }}</div>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  <div class="overflow-x-auto bg-white shadow rounded-lg">
+    <table class="w-full text-left border-collapse">
+      <thead class="bg-gray-100 text-gray-700">
+        <tr>
+          <th class="p-3 border-b">Label</th>
+          <th class="p-3 border-b">Value</th>
+          <th class="p-3 border-b text-center">Status</th>
+          <th class="p-3 border-b text-center">Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for d in dimensions %}
+        <tr class="hover:bg-gray-50 transition">
+          <td class="p-3 border-b">{{ d.label }}</td>
+          <td class="p-3 border-b">{{ d.value }}</td>
+          <td class="p-3 border-b text-center">
+            {% if d.is_active %}
+            <span class="text-green-600 font-semibold">Active</span>
+            {% else %}
+            <span class="text-red-600 font-semibold">Suspended</span>
+            {% endif %}
+          </td>
+          <td class="p-3 border-b text-center">
+            <!-- Toggle -->
+            <a href="{% url 'toggle_dimension' d.id %}" class="text-blue-600 hover:underline">
+              {% if d.is_active %} Suspend {% else %} Activate {% endif %}
+            </a> |
+            <!-- Edit -->
+            <a href="#"
+              onclick="openDimensionModal('{{ d.id }}', '{{ d.label }}', '{{ d.value }}', '{{ d.is_active }}')"
+              class="text-yellow-600 hover:underline">Edit</a>|
+            <!-- Delete -->
+            <a href="{% url 'delete_dimension' d.id %}" onclick="return confirm('ลบ Dimension {{ d.label }} ?');"
+              class="text-red-600 hover:underline">Delete</a>
+          </td>
+        </tr>
+        {% empty %}
+        <tr>
+          <td colspan="4" class="text-center p-6 text-gray-500">ยังไม่มี Dimensions</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+
+
+  <!-- Pagination -->
+  {% include 'pagination.html' %}
+
+  <!-- ปุ่มเพิ่ม (Bottom Left) -->
+  <div class="mt-6">
+    <button onclick="openDimensionModal()"
+      class="bg-gray-900 text-white px-4 py-2 rounded-lg shadow hover:bg-black transition">
+      + Add Dimension
+    </button>
+  </div>
+
+</div>
+
+
+<div id="dimensionModal" class="hidden fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+  <div class="bg-white w-full max-w-md rounded-lg shadow-lg p-6">
+    <h2 id="modalTitle" class="text-lg font-bold mb-4 text-black">เพิ่ม Dimension ใหม่</h2>
+    <form id="dimensionForm" method="POST" action="{% url 'add_dimension' %}" class="space-y-4">
+      {% csrf_token %}
+      <div>
+        <label class="block font-medium">Label</label>
+        <input type="text" name="label" id="dimensionLabel" required class="w-full border rounded-lg px-3 py-2">
+      </div>
+      <div>
+        <label class="block font-medium">Value</label>
+        <input type="text" name="value" id="dimensionValue" required class="w-full border rounded-lg px-3 py-2">
+      </div>
+      <div>
+        <label class="block font-medium">Status</label>
+        <select name="is_active" id="dimensionStatus" class="w-full border rounded-lg px-3 py-2">
+          <option value="true">Active</option>
+          <option value="false">Suspended</option>
+        </select>
+      </div>
+      <div class="flex justify-end gap-3">
+        <button type="button" onclick="closeDimensionModal()"
+          class="px-4 py-2 rounded-lg border hover:bg-gray-100">Cancel</button>
+        <button type="submit" class="px-4 py-2 rounded-lg bg-gray-900 text-white hover:bg-black">Save</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+  function openDimensionModal(id = null, label = '', value = '', isActive = 'true') {
+    const modal = document.getElementById("dimensionModal");
+    const form = document.getElementById("dimensionForm");
+    const title = document.getElementById("modalTitle");
+
+    if (id) {
+      title.textContent = "แก้ไข Dimension";
+      form.action = `/edit-dimension/${id}/`;
+      document.getElementById("dimensionLabel").value = label;
+      document.getElementById("dimensionValue").value = value;
+      document.getElementById("dimensionStatus").value = (isActive === "True" || isActive === "true") ? "true" : "false";
+    } else {
+      title.textContent = "เพิ่ม Dimension ใหม่";
+      form.action = "{% url 'add_dimension' %}";
+      document.getElementById("dimensionLabel").value = "";
+      document.getElementById("dimensionValue").value = "";
+      document.getElementById("dimensionStatus").value = "true";
+    }
+
+    modal.classList.remove("hidden");
+  }
+
+  function closeDimensionModal() {
+    document.getElementById("dimensionModal").classList.add("hidden");
+  }
+</script>
+
+
+{% endblock %}

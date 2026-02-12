@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block title %}ตั้งค่า{% endblock %}
+{% block content %}
+<h2 class="text-2xl font-bold mb-6">การตั้งค่าบัญชีผู้ใช้</h2>
+
+<!-- เปลี่ยนรหัสผ่าน -->
+<div class="bg-white shadow rounded p-6 mb-6">
+  <h3 class="font-semibold text-lg mb-2">เปลี่ยนรหัสผ่าน</h3>
+  <p class="text-sm text-gray-600 mb-4">อัปเดตรหัสผ่านใหม่เพื่อความปลอดภัยของบัญชี</p>
+  <a href="{% url 'change_password' %}"
+     class="inline-block bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">
+    เปลี่ยนรหัสผ่าน
+  </a>
+</div>
+
+<!-- ลบบัญชี -->
+<div class="bg-white shadow rounded p-6 border border-red-300">
+  <h3 class="font-semibold text-lg text-red-700 mb-2">ลบบัญชีผู้ใช้</h3>
+  <p class="text-sm text-gray-600 mb-4">การลบบัญชีเป็นการลบข้อมูลทั้งหมดถาวร ไม่สามารถกู้คืนได้</p>
+  <a href="{% url 'delete_account_confirm' %}"
+     class="inline-block bg-red-600 text-white px-4 py-2 rounded hover:bg-red-700">
+    ลบบัญชี
+  </a>
+</div>
+{% endblock %}

@@ -1,0 +1,134 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="max-w-4xl mx-auto p-6">
+    {% if messages %}
+  <div class="mb-4">
+    {% for message in messages %}
+      <div class="p-3 rounded bg-green-100 text-green-800">
+        {{ message }}
+      </div>
+    {% endfor %}
+  </div>
+{% endif %}
+  <h1 class="text-2xl font-bold mb-6">จัดการโมเดล (Custom Model)</h1>
+
+  <div class="overflow-x-auto bg-white shadow rounded-lg">
+    <table class="w-full text-left border-collapse">
+  <thead class="bg-gray-100 text-gray-700">
+    <tr>
+      <th class="p-3 border-b">Model Name</th>
+      <th class="p-3 border-b">Model Value</th>
+      <th class="p-3 border-b text-center">Status</th>
+      <th class="p-3 border-b text-center">Operations</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for m in models_data %}
+  <tr>
+    <td class="p-3 border-b">{{ m.name }}</td>
+    <td class="p-3 border-b text-gray-600">{{ m.value }}</td>
+    <td class="p-3 border-b">
+      {% if m.is_active %}
+        <span class="text-green-600">Active</span>
+      {% else %}
+        <span class="text-red-600">Suspended</span>
+      {% endif %}
+        </td>
+        <td class="p-3 border-b text-center">
+          <a href="{% url 'toggle_status' m.id %}" 
+             class="text-blue-600 hover:underline">
+             {% if item.status == "active" %} Suspend {% else %} Activate {% endif %}
+          </a>
+          |
+          <a href="#"
+     onclick="openModelModal('{{ m.id }}', '{{ m.name }}', '{{ m.value }}', '{{ m.is_active }}')"
+     class="text-yellow-600 hover:underline">Edit</a>
+     |
+          <a href="{% url 'delete_model' m.id %}"
+             class="text-red-600 hover:underline"
+             onclick="return confirm('ลบ {{ item.name }} ?');">
+             Delete
+          </a>
+        </td>
+      </tr>
+    {% empty %}
+         <tr>
+     <td colspan="3" class="text-center">ไม่มีข้อมูลโมเดล</td>
+        </tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+  </div>
+
+<div class="mt-6">
+  <button onclick="openModelModal()"
+          class="bg-green-600 text-white px-4 py-2 rounded-lg shadow hover:bg-green-700 transition">
+    + Add New Model
+  </button>
+</div>
+
+<!-- Modal Add/Edit Model -->
+<div id="modelModal" class="hidden fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+  <div class="bg-white w-full max-w-md rounded-lg shadow-lg p-6">
+    <h2 id="modelModalTitle" class="text-lg font-bold mb-4 text-green-600">เพิ่ม Model ใหม่</h2>
+    <form id="modelForm" method="POST" action="{% url 'add_model' %}" class="space-y-4">
+      {% csrf_token %}
+      <div>
+        <label class="block font-medium">Model Name</label>
+        <input type="text" name="name" id="modelName" required class="w-full border rounded-lg px-3 py-2">
+      </div>
+      <div>
+        <label class="block font-medium">Model Value</label>
+        <input type="text" name="value" id="modelValue" required class="w-full border rounded-lg px-3 py-2">
+      </div>
+      <div>
+        <label class="block font-medium">Status</label>
+        <select name="is_active" id="modelStatus" class="w-full border rounded-lg px-3 py-2">
+          <option value="true">Active</option>
+          <option value="false">Suspended</option>
+        </select>
+      </div>
+      <div class="flex justify-end gap-3">
+        <button type="button" onclick="closeModelModal()"
+                class="px-4 py-2 rounded-lg border hover:bg-gray-100">Cancel</button>
+        <button type="submit"
+                class="px-4 py-2 rounded-lg bg-green-600 text-white hover:bg-green-700">Save</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+
+<script>
+function openModelModal(id=null, name='', value='', isActive='true') {
+  const modal = document.getElementById("modelModal");
+  const form = document.getElementById("modelForm");
+  const title = document.getElementById("modelModalTitle");
+
+  if (id) {
+    // Edit Mode
+    title.textContent = "แก้ไข Model";
+    form.action = `/edit-model/${id}/`;
+    document.getElementById("modelName").value = name;
+    document.getElementById("modelValue").value = value;
+    document.getElementById("modelStatus").value = (isActive === "True" || isActive === "true") ? "true" : "false";
+  } else {
+    // Add Mode
+    title.textContent = "เพิ่ม Model ใหม่";
+    form.action = "{% url 'add_model' %}";
+    document.getElementById("modelName").value = "";
+    document.getElementById("modelValue").value = "";
+    document.getElementById("modelStatus").value = "true";
+  }
+
+  modal.classList.remove("hidden");
+}
+
+function closeModelModal() {
+  document.getElementById("modelModal").classList.add("hidden");
+}
+</script>
+
+
+{% endblock %}

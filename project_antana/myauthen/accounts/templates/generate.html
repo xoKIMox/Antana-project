@@ -1,0 +1,1062 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block content %}
+
+<style>
+  .active-btn {
+    background-color: #3b82f6 !important;
+    color: white !important;
+    border-color: #2563eb !important;
+  }
+</style>
+<script src="https://unpkg.com/htmx.org@1.9.10"></script>
+
+<div id="loadingBox" class="hidden fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+  <div class="bg-white px-6 py-4 rounded-xl shadow text-center">
+    <p id="loadingText" class="text-xl font-bold">
+      กำลังประมวลผล...
+    </p>
+  </div>
+</div>
+
+<!-- ฟอร์มหลัก -->
+<form id="generateForm" method="POST" action="{% url 'generate_view' %}">
+  {% csrf_token %}
+
+  <!-- Hidden Inputs -->
+  <input type="hidden" name="model_label" id="modelInput">
+  <input type="hidden" name="dimension" id="dimensionInput">
+  <input type="hidden" name="batch" id="batchInput">
+  <input type="hidden" name="positive_prompt" id="promptInput">
+  <input type="hidden" name="negative_prompt" id="negativeInput"
+    value="low quality, bad anatomy, blurry, distorted, watermark, noise">
+  <input type="hidden" name="seed" id="seedHidden">
+
+  <!-- Image Modal (ถ้าอยากใช้ overlay แยก) -->
+  <div id="imageBox" class="hidden fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+    <div class="bg-white p-6 rounded-xl shadow max-w-3xl max-h-[80vh] overflow-auto">
+      <button onclick="closeBox('imageBox')" type="button" class="float-right text-2xl">×</button>
+      <div id="imageBoxContent">
+        {% if histories %}
+        {% for h in histories %}
+        <div class="p-2">
+          <img src="{{ h.image_url }}" class="rounded-xl w-full shadow">
+          <div class="text-sm text-gray-600 mt-1">
+            Model: {{ h.model_name }} | Seed: {{ h.seed }} | เวลา: {{ h.created_at }}
+          </div>
+        </div>
+        {% endfor %}
+        {% else %}
+        <p class="text-sm text-gray-500">
+          ยังไม่มีภาพที่เคยสร้างมาก่อน
+        </p>
+        {% endif %}
+      </div>
+
+    </div>
+  </div>
+
+
+
+  <!-- Navbar -->
+  <div class="flex justify-end p-4">
+    <button id="toggleSidebar" type="button"
+      class="p-2 bg-white text-black rounded-lg hover:bg-gray-100 transition border border-gray-300 shadow-lg">
+      ☰
+    </button>
+  </div>
+
+  <!-- Sidebar -->
+  <aside id="sidebar" class="fixed right-0 top-16 h-[calc(100%-4rem)] w-80 
+                bg-white border-l border-gray-200 shadow-lg p-4
+                overflow-y-auto rounded-tl-xl z-50
+                transform translate-x-full transition-transform duration-300 ease-in-out">
+
+    <div class="flex justify-end">
+      <button id="closeSidebar" type="button" class="text-gray-500 hover:text-red-600 text-2xl font-bold">×</button>
+    </div>
+
+    <!-- MODEL -->
+    <div class="mb-4">
+      <label class="block font-medium mb-2">Model</label>
+      <select id="modelSelect" onchange="selectModel(this.value)" class="w-full border rounded px-3 py-2">
+        {% for m in models_available %}
+        <option value="{{ m.id }}">{{ m.name }}</option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <!-- DIMENSIONS -->
+    <div class="mb-4 mt-6">
+      <label class="block font-medium mb-2">Image Dimensions</label>
+      <div class="flex gap-2 flex-wrap">
+        {% for d in dimensions %}
+        <button type="button" onclick="selectDimension(this, '{{ d.id }}')"
+          class="px-3 py-1 border rounded dimension-btn" hx-get="{% url 'generate_preview_frame' %}"
+          hx-target="#imagePreview" hx-swap="innerHTML" hx-include="#dimensionInput,#batchInput"
+          hx-vals='{"dimension_id": "{{ d.id }}"}'>
+          {{ d.label }}
+        </button>
+        {% endfor %}
+      </div>
+    </div>
+
+    <!-- NUMBER OF IMAGES -->
+    <div class="mb-4 mt-6">
+      <label class="block font-medium mb-2">Number of Images</label>
+      <div class="flex gap-2">
+        {% for n in numbers %}
+        <button type="button" onclick="selectBatch(this, '{{ n.value }}')" class="px-3 py-1 border rounded batch-btn"
+          hx-get="{% url 'generate_preview_frame' %}" hx-target="#imagePreview" hx-swap="innerHTML"
+          hx-include="#dimensionInput,#batchInput">
+          {{ n.value }}
+        </button>
+        {% endfor %}
+      </div>
+    </div>
+
+    <!-- SEED -->
+    <div class="mb-4 mt-6">
+      <label class="block font-medium mb-1">Seed (รหัสเฉพาะของภาพ)</label>
+      <p class="text-xs text-gray-500 mb-2">
+        ใช้เลขเดิมเพื่อล็อคหน้าตาภาพให้เหมือนเดิม (เว้นว่าง = สุ่มใหม่)
+      </p>
+      <div class="flex gap-2">
+        <input id="seedInput" type="number" placeholder="เช่น 123456789"
+          class="flex-1 px-3 py-2 border rounded outline-none text-sm">
+        <button type="button" onclick="randomSeed()" class="px-3 py-2 border rounded text-sm hover:bg-gray-100"
+          title="สุ่มเลขใหม่">
+          🎲
+        </button>
+      </div>
+    </div>
+
+    <div class="mt-6">
+      <button type="button" onclick="resetDefaults()" class="w-full px-4 py-2 border rounded hover:bg-gray-100">
+        🔄 Reset to Defaults
+      </button>
+    </div>
+
+  </aside>
+
+  <!-- HISTORY MODAL (Restored & Enhanced) -->
+  <div id="historyBox" class="fixed inset-0 bg-black/50 hidden items-center justify-center z-50">
+    <div class="bg-white rounded-xl shadow-2xl max-w-5xl w-full mx-4 p-6 flex flex-col max-h-[90vh]">
+      <div class="flex justify-between items-center mb-4 border-b pb-2">
+        <h2 class="text-2xl font-bold text-gray-800">History</h2>
+        <button type="button" onclick="closeBox('historyBox')"
+          class="text-gray-500 hover:text-red-500 text-3xl">&times;</button>
+      </div>
+
+      <div class="flex-1 overflow-y-auto grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 p-2">
+        {% for h in histories %}
+        <div class="bg-white p-2 rounded-xl shadow border flex flex-col gap-2 relative group"
+          id="history-card-{{ h.id }}">
+          <img src="{{ h.image_url }}" class="w-full h-auto rounded-xl">
+
+          <div class="flex flex-col gap-1 text-xs text-gray-500 mt-1">
+            <span class="truncate">Model: {{ h.model_name }}</span>
+            <span class="truncate">Seed: {{ h.seed }}</span>
+          </div>
+
+          <div class="flex gap-2 mt-2">
+            <!-- SHARE BUTTON -->
+            <a href="{% url 'share_post' h.id %}"
+              class="bg-blue-600 hover:bg-blue-700 text-white py-1 px-2 rounded text-xs flex items-center justify-center">
+              Share
+            </a>
+
+            <!-- REMIX BUTTON -->
+            <button type="button" onclick="remixHistory(this)" data-prompt="{{ h.positive_prompt|escapejs }}"
+              data-negative="{{ h.negative_prompt|escapejs }}" data-seed="{{ h.seed }}" data-model="{{ h.model_name }}"
+              data-dimension=""
+              class="flex-1 bg-black hover:bg-gray-800 text-white py-1 px-2 rounded text-xs font-bold text-center">
+              Remix
+            </button>
+
+            <!-- DELETE BUTTON -->
+            <button type="button" onclick="deleteHistory({{ h.id }})"
+              class="bg-gray-200 hover:bg-gray-300 text-gray-700 py-1 px-2 rounded text-xs">
+              🗑
+            </button>
+          </div>
+        </div>
+        {% empty %}
+        <p class="col-span-full text-center text-gray-500 py-10">ยังไม่มีประวัติการสร้างภาพ</p>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+
+  <!-- ส่วนแสดงผลภาพล่าสุด -->
+  <div class="max-w-5xl mx-auto mt-8 px-4">
+    <div id="lastGenerateInfo" class="text-sm text-gray-600 mb-3 hidden">
+      <div>Model: <span id="infoModel"></span></div>
+      <div>Seed: <span id="infoSeed"></span></div>
+      <div>Prompt: <span id="infoPrompt"></span></div>
+      <div>Negative Prompt: <span id="infoNegative"></span></div>
+    </div>
+
+    <div id="imagePreview" class="flex flex-wrap justify-center items-center gap-4 min-h-[200px]">
+      <!-- JS จะเติมรูป + ปุ่ม Share -->
+    </div>
+  </div>
+
+  <!-- BOTTOM BAR -->
+  <div class="fixed bottom-6 left-1/2 transform -translate-x-1/2 z-40 
+              flex items-center gap-2 w-full max-w-5xl px-2">
+
+
+
+    <!-- PROMPT AREA -->
+    <div class="flex flex-col flex-1 bg-white border border-gray-300 
+                rounded-2xl shadow-md px-4 py-3 gap-3">
+
+      <!-- Top: Textarea -->
+      <input type="hidden" id="promptInput" name="prompt">
+      <textarea id="mainPromptInput" placeholder="Prompt ที่ต้องการ"
+        oninput="document.getElementById('promptInput').value=this.value; autoExpand(this)"
+        class="w-full text-lg outline-none border-none bg-transparent resize-none overflow-hidden" rows="3"
+        style="min-height: 60px; max-height: 300px;"></textarea>
+
+      <!-- Bottom: Buttons -->
+      <div class="flex items-center justify-between w-full">
+        <!-- Left side: History -->
+        <button onclick="openBox('historyBox')" type="button"
+          class="bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-full px-4 py-2 text-sm font-semibold flex items-center gap-2 transition">
+          <span>🕒</span> History
+        </button>
+
+        <!-- Right side: Action Buttons -->
+        <div class="flex items-center gap-2">
+          <button type="button" onclick="askAIPromptAssist()"
+            class="bg-blue-600 text-white rounded-full px-4 py-2 hover:bg-blue-700 transition">
+            AI Assist
+          </button>
+
+          <button onclick="submitGenerate()" type="button" class="bg-black text-white rounded-full px-4 py-2">
+            Generate
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- NEGATIVE PROMPT BOX -->
+  <div id="negativePromptContainer" class="hidden fixed bottom-20 left-1/2
+              transform -translate-x-1/2 bg-white
+              border border-gray-300 rounded-xl shadow-md px-4 py-3 w-full max-w-2xl">
+
+    <input id="negativePromptInput" type="text" value="bad anatomy, bad hands, bad fingers, missing fingers, extra fingers,
+distorted face, asymmetrical face, blurry, lowres, grainy, noisy,
+watermark, text, logo, overexposed, underexposed,
+haze artifacts, fog distortion, fabric artifacts,camera, holding camera, photographer
+" oninput="document.getElementById('negativeInput').value=this.value"
+      placeholder="Negative Prompt (สิ่งที่ไม่ต้องการในภาพ)" class="w-full text-lg outline-none bg-transparent">
+  </div>
+
+  <!-- AI Assist Modal (New) -->
+  <div id="aiAssistModal" class="fixed inset-0 bg-black/50 hidden items-center justify-center z-50">
+    <div class="bg-white rounded-xl shadow-2xl max-w-4xl w-full mx-4 p-6 flex flex-col max-h-[90vh]">
+      <div class="flex justify-between items-center mb-4 border-b pb-2">
+        <h2 class="text-2xl font-bold text-gray-800">AI Prompt Assistant (ผู้ช่วยเขียน Prompt)</h2>
+        <button type="button" onclick="closeAiAssistModal()"
+          class="text-gray-500 hover:text-red-500 text-3xl leading-none">
+          &times;
+        </button>
+      </div>
+
+      <div class="flex-1 overflow-y-auto grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 p-2" id="aiAssistContent">
+        <!-- Categories will be injected here -->
+      </div>
+
+      <div class="mt-6 pt-4 border-t flex justify-end gap-3">
+        <button type="button" onclick="closeAiAssistModal()"
+          class="px-5 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50">
+          ยกเลิก
+        </button>
+        <button type="button" onclick="applyAiAssist()"
+          class="px-5 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 shadow-lg font-semibold">
+          นำไปใช้
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Style Selection Modal -->
+  <div id="styleSelectionModal" class="fixed inset-0 bg-black/50 hidden items-center justify-center z-50">
+    <div class="bg-white rounded-xl shadow-2xl max-w-2xl w-full mx-4 p-6 flex flex-col">
+      <div class="flex justify-between items-center mb-6 border-b pb-2">
+        <h2 class="text-2xl font-bold text-gray-800">1. เลือกสไตล์ (Style)</h2>
+        <button type="button" onclick="closeStyleModal()"
+          class="text-gray-500 hover:text-red-500 text-3xl leading-none">
+          &times;
+        </button>
+      </div>
+
+      <p class="text-gray-600 mb-6 text-center">เลือกสไตล์งานภาพที่คุณต้องการ</p>
+
+      <div class="grid grid-cols-2 gap-4 mb-4">
+        <button type="button" onclick="nextToSubject('Realistic')"
+          class="p-4 border-2 border-gray-200 rounded-xl hover:border-blue-500 hover:bg-blue-50 transition flex flex-col items-center gap-2 group">
+          <span class="text-4xl">📸</span>
+          <span class="font-bold text-gray-700 group-hover:text-blue-600">Realistic</span>
+          <span class="text-xs text-gray-500">สมจริง</span>
+        </button>
+        <button type="button" onclick="nextToSubject('Anime')"
+          class="p-4 border-2 border-gray-200 rounded-xl hover:border-pink-500 hover:bg-pink-50 transition flex flex-col items-center gap-2 group">
+          <span class="text-4xl">🎎</span>
+          <span class="font-bold text-gray-700 group-hover:text-pink-600">Anime</span>
+          <span class="text-xs text-gray-500">อนิเมะ/การ์ตูน</span>
+        </button>
+        <button type="button" onclick="nextToSubject('3D Render')"
+          class="p-4 border-2 border-gray-200 rounded-xl hover:border-purple-500 hover:bg-purple-50 transition flex flex-col items-center gap-2 group">
+          <span class="text-4xl">🧊</span>
+          <span class="font-bold text-gray-700 group-hover:text-purple-600">3D Render</span>
+          <span class="text-xs text-gray-500">3D/เกม</span>
+        </button>
+        <button type="button" onclick="nextToSubject('Painting')"
+          class="p-4 border-2 border-gray-200 rounded-xl hover:border-orange-500 hover:bg-orange-50 transition flex flex-col items-center gap-2 group">
+          <span class="text-4xl">🎨</span>
+          <span class="font-bold text-gray-700 group-hover:text-orange-600">Painting</span>
+          <span class="text-xs text-gray-500">งานวาดศิลปะ</span>
+        </button>
+      </div>
+
+      <!-- Other Style -->
+      <div class="flex gap-2 border-t pt-4">
+        <input type="text" id="customStyleInput" placeholder="หรือระบุสไตล์อื่นๆ (Other)..."
+          class="flex-1 border border-gray-300 rounded-lg px-4 py-2 outline-none focus:ring-2 focus:ring-blue-500">
+        <button type="button" onclick="nextToSubject(document.getElementById('customStyleInput').value)"
+          class="bg-gray-800 text-white px-6 py-2 rounded-lg hover:bg-black transition font-semibold">
+          ไปต่อ >
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Subject Selection Modal (New) -->
+  <div id="subjectSelectionModal" class="fixed inset-0 bg-black/50 hidden items-center justify-center z-50">
+    <div class="bg-white rounded-xl shadow-2xl max-w-2xl w-full mx-4 p-6 flex flex-col">
+      <div class="flex justify-between items-center mb-6 border-b pb-2">
+        <h2 class="text-2xl font-bold text-gray-800">2. เลือกสิ่งที่ต้องการ (Subject)</h2>
+        <button type="button" onclick="closeSubjectModal()"
+          class="text-gray-500 hover:text-red-500 text-3xl leading-none">
+          &times;
+        </button>
+      </div>
+
+      <p class="text-gray-600 mb-6 text-center">เลือกวัตถุหลักหรือตัวละครที่คุณต้องการสร้าง</p>
+
+      <div class="grid grid-cols-2 gap-4 mb-4">
+        <button type="button" onclick="confirmFinalGeneration('Person')"
+          class="p-4 border-2 border-gray-200 rounded-xl hover:border-blue-500 hover:bg-blue-50 transition flex flex-col items-center gap-2 group">
+          <span class="text-4xl">👤</span>
+          <span class="font-bold text-gray-700 group-hover:text-blue-600">Person</span>
+          <span class="text-xs text-gray-500">คน / ตัวละคร</span>
+        </button>
+        <button type="button" onclick="confirmFinalGeneration('Animal')"
+          class="p-4 border-2 border-gray-200 rounded-xl hover:border-green-500 hover:bg-green-50 transition flex flex-col items-center gap-2 group">
+          <span class="text-4xl">🐾</span>
+          <span class="font-bold text-gray-700 group-hover:text-green-600">Animal</span>
+          <span class="text-xs text-gray-500">สัตว์ต่างๆ</span>
+        </button>
+        <button type="button" onclick="confirmFinalGeneration('Landscape')"
+          class="p-4 border-2 border-gray-200 rounded-xl hover:border-teal-500 hover:bg-teal-50 transition flex flex-col items-center gap-2 group">
+          <span class="text-4xl">🏞️</span>
+          <span class="font-bold text-gray-700 group-hover:text-teal-600">Landscape</span>
+          <span class="text-xs text-gray-500">วิวทิวทัศน์</span>
+        </button>
+        <button type="button" onclick="confirmFinalGeneration('Fantasy')"
+          class="p-4 border-2 border-gray-200 rounded-xl hover:border-indigo-500 hover:bg-indigo-50 transition flex flex-col items-center gap-2 group">
+          <span class="text-4xl">🚀</span>
+          <span class="font-bold text-gray-700 group-hover:text-indigo-600">Fantasy/Sci-Fi</span>
+          <span class="text-xs text-gray-500">แฟนตาซี / ไซไฟ</span>
+        </button>
+      </div>
+
+      <!-- Other Subject -->
+      <div class="flex gap-2 border-t pt-4">
+        <input type="text" id="customSubjectInput" placeholder="หรือระบุสิ่งอื่นๆ (Other)..."
+          class="flex-1 border border-gray-300 rounded-lg px-4 py-2 outline-none focus:ring-2 focus:ring-blue-500">
+        <button type="button" onclick="confirmFinalGeneration(document.getElementById('customSubjectInput').value)"
+          class="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition font-semibold">
+          สร้างผลลัพธ์ ✨
+        </button>
+      </div>
+    </div>
+  </div>
+
+</form>
+
+<script>
+  // Sidebar
+  let aiAssistData = {};
+  const sidebar = document.getElementById("sidebar");
+
+  function openSidebarPanel() {
+    sidebar.classList.replace("translate-x-full", "translate-x-0");
+  }
+
+  function closeSidebarPanel() {
+    sidebar.classList.replace("translate-x-0", "translate-x-full");
+  }
+
+  document.getElementById("toggleSidebar").onclick = openSidebarPanel;
+  document.getElementById("closeSidebar").onclick = closeSidebarPanel;
+
+  function autoExpand(field) {
+    field.style.height = 'inherit';
+    const computed = window.getComputedStyle(field);
+    const height = parseInt(computed.getPropertyValue('border-top-width'), 10)
+      + parseInt(computed.getPropertyValue('padding-top'), 10)
+      + field.scrollHeight
+      + parseInt(computed.getPropertyValue('padding-bottom'), 10)
+      + parseInt(computed.getPropertyValue('border-bottom-width'), 10);
+    field.style.height = height + 'px';
+  }
+
+  // Active button helper
+
+  // Active button helper
+  function clearActive(cls) {
+    document.querySelectorAll("." + cls).forEach(b => b.classList.remove("active-btn"));
+  }
+
+  // Model
+  function selectModel(val) {
+    document.getElementById("modelInput").value = val;
+  }
+
+  // Dimension
+  function selectDimension(btn, id) {
+    document.getElementById("dimensionInput").value = id;
+    clearActive("dimension-btn");
+    btn.classList.add("active-btn");
+  }
+
+  // Batch
+  function selectBatch(btn, val) {
+    document.getElementById("batchInput").value = val;
+    clearActive("batch-btn");
+    btn.classList.add("active-btn");
+  }
+
+  // Negative prompt toggle
+  function toggleNegativePrompt() {
+    const box = document.getElementById("negativePromptContainer");
+    box.classList.toggle("hidden");
+  }
+
+  // Seed
+  function randomSeed() {
+    const seed = Math.floor(Math.random() * 1e16);
+    document.getElementById("seedInput").value = seed;
+  }
+
+  // Reset
+  function resetDefaults() {
+    document.getElementById("modelInput").value = "";
+    document.getElementById("dimensionInput").value = "";
+    document.getElementById("batchInput").value = "";
+    document.getElementById("promptInput").value = "";
+    document.getElementById("negativeInput").value = "";
+    document.getElementById("seedInput").value = "";
+    document.getElementById("seedHidden").value = "";
+  }
+
+  // Loading
+  function showLoadingBox(message) {
+    const box = document.getElementById("loadingBox");
+    const textEl = document.getElementById("loadingText");
+
+    if (message && textEl) {
+      textEl.textContent = message;
+    }
+
+    if (box) box.classList.remove("hidden");
+  }
+
+  function hideLoadingBox() {
+    const box = document.getElementById("loadingBox");
+    if (box) box.classList.add("hidden");
+  }
+
+  // Box helper (image/history)
+  function openBox(id) {
+
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.classList.remove("hidden");
+    el.classList.add("flex");
+  }
+
+  function closeBox(id) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.classList.add("hidden");
+    el.classList.remove("flex");
+  }
+
+
+  // Submit Generate (เวอร์ชันเดียว)
+  async function submitGenerate() {
+    const formData = new FormData();
+    formData.append("csrfmiddlewaretoken", document.querySelector("[name=csrfmiddlewaretoken]").value);
+    formData.append("model_label", document.getElementById("modelInput").value);
+    formData.append("dimension", document.getElementById("dimensionInput").value);
+    formData.append("batch", document.getElementById("batchInput").value);
+    formData.append("positive_prompt", document.getElementById("mainPromptInput").value);
+    formData.append("negative_prompt", document.getElementById("negativePromptInput").value || "bad anatomy, bad hands, bad fingers, missing fingers, extra fingers, distorted face, asymmetrical face, blurry, lowres, grainy, noisy, watermark, text, logo, overexposed, underexposed, haze artifacts, fog distortion, fabric artifacts, camera, holding camera, photographer");
+
+
+    const seedVal = (document.getElementById("seedInput").value || "").trim();
+    formData.append("seed", seedVal);
+    document.getElementById("seedHidden").value = seedVal;
+
+    if (!formData.get("model_label") || !formData.get("dimension")) {
+      alert("กรุณาเลือก Model และขนาดภาพก่อน");
+      return;
+    }
+
+    showLoadingBox("กำลังสร้างภาพ...");
+
+    const res = await fetch("{% url 'generate_view' %}", {
+      method: "POST",
+      body: formData
+    });
+
+    hideLoadingBox();
+
+    let data;
+    try {
+      data = await res.json();
+    } catch (e) {
+      alert("เกิดข้อผิดพลาดในการอ่านผลลัพธ์จากเซิร์ฟเวอร์");
+      return;
+    }
+
+    if (data.status === "success") {
+      showGeneratedImages(data);
+    } else if (data.status === "timeout") {
+      alert("ComfyUI ใช้เวลานานเกินกำหนด");
+    } else {
+      alert("Error: " + (data.message || ""));
+    }
+  }
+
+  // แสดงภาพ + ปุ่ม Share
+  function showGeneratedImages(data) {
+    const container = document.getElementById("imagePreview");
+    container.innerHTML = "";
+
+    const images = data.images || [];
+    const historyIds = data.history_ids || [];
+
+    images.forEach((url, index) => {
+      const historyId = historyIds[index] || "";
+
+      const card = document.createElement("div");
+      // Get current model name for display
+      const modelSelect = document.getElementById("modelSelect");
+      const modelName = modelSelect ? modelSelect.options[modelSelect.selectedIndex].text : "";
+      const seedVal = data.seed || document.getElementById("seedInput").value;
+
+      card.className = "bg-white p-2 rounded-xl shadow border flex flex-col gap-2 w-full sm:w-[48%] lg:w-[32%]";
+
+      card.innerHTML = `
+        <img src="${url}" class="w-full h-auto rounded-xl shadow border border-gray-200 cursor-pointer hover:opacity-90 transition" onclick="openFullImage('${url}')">
+
+        <div class="flex flex-col gap-1 text-xs text-gray-500 mt-1">
+          <span class="truncate">Model: ${modelName}</span>
+          <span class="truncate">Seed: ${seedVal}</span>
+        </div>
+
+        <!-- Star Rating -->
+        <div class="flex items-center justify-center gap-1 text-yellow-400 rating-stars py-2 border-t border-b border-gray-100 my-1" data-history-id="${historyId}" data-rating="0">
+          ${[1, 2, 3, 4, 5].map(i => `
+          <button type="button" class="star-btn text-xl hover:scale-125 transition" data-value="${i}">
+            ☆
+          </button>
+          `).join("")}
+        </div>
+
+        <div class="flex gap-2">
+            <!-- Share -->
+            <button type="button" onclick="shareWithRating('${historyId}')"
+              class="bg-blue-600 hover:bg-blue-700 text-white py-1 px-2 rounded text-xs flex items-center justify-center share-btn opacity-50 cursor-not-allowed">
+              Share
+            </button>
+
+            <!-- Remix -->
+            <button type="button" onclick="remixHistory(this)"
+              data-prompt="${(data.prompt || document.getElementById('mainPromptInput').value).replace(/"/g, '&quot;')}"
+              data-negative="${(data.negative || document.getElementById('negativePromptInput').value).replace(/"/g, '&quot;')}"
+              data-seed="${data.seed}"
+              data-model="${document.getElementById('modelInput').value}"
+              data-dimension="${document.getElementById('dimensionInput').value}"
+              class="flex-1 bg-black hover:bg-gray-800 text-white py-1 px-2 rounded text-xs font-bold text-center">
+              Remix
+            </button>
+            
+            <!-- Delete -->
+            <button type="button" onclick="deleteHistory(${historyId})"
+              class="bg-gray-200 hover:bg-gray-300 text-gray-700 py-1 px-2 rounded text-xs">
+              🗑
+            </button>
+        </div>
+          `;
+
+      container.appendChild(card);
+
+      // ผูก event ให้ปุ่มดาวใน card นี้
+      setupRating(card, historyId);
+    });
+
+    // ข้อมูล model/seed/prompt
+    const infoBox = document.getElementById("lastGenerateInfo");
+    document.getElementById("infoModel").textContent = data.model || "";
+    document.getElementById("infoSeed").textContent = data.seed || "";
+    document.getElementById("infoPrompt").textContent = data.prompt ||
+      document.getElementById("mainPromptInput").value;
+    document.getElementById("infoNegative").textContent = data.negative ||
+      document.getElementById("negativePromptInput").value;
+    infoBox.classList.remove("hidden");
+
+    // อัปเดตรูปใน Image Modal ด้วยชุดล่าสุด
+    const modalContent = document.getElementById("imageBoxContent");
+    if (modalContent) {
+      modalContent.innerHTML = "";
+      images.forEach(url => {
+        modalContent.innerHTML += `
+          <div class="p-2 cursor-pointer hover:opacity-90 transition" onclick="openFullImage('${url}')">
+            <img src="${url}" class="rounded-xl w-full shadow border border-gray-200">
+          </div>
+          `;
+      });
+    }
+  }
+
+  // AI Prompt (เวอร์ชันเดียว + Modal)
+  // AI Prompt (เวอร์ชันเดียว + Modal)
+  function renderAiAssistModal(originalPrompt = "") {
+    const container = document.getElementById("aiAssistContent");
+    container.innerHTML = "";
+
+    // Original Prompt Display
+    if (originalPrompt) {
+      const originalDiv = document.createElement("div");
+      originalDiv.className = "col-span-1 md:col-span-2 lg:col-span-3 bg-blue-50 p-4 rounded-xl border border-blue-200 mb-2 shadow-sm";
+      originalDiv.innerHTML = `
+        <label class="text-sm font-bold text-blue-800 uppercase tracking-wider mb-2 block">ข้อความต้นฉบับ (Original Prompt)</label>
+        <p class="text-gray-900 text-lg font-medium italic">"${originalPrompt}"</p>
+      `;
+      container.appendChild(originalDiv);
+
+      // Helper Text (Tip) - Large and Clear
+      const tipDiv = document.createElement("div");
+      tipDiv.className = "col-span-1 md:col-span-2 lg:col-span-3 mb-6 text-center border-b pb-4";
+      tipDiv.innerHTML = `
+        <p class="text-xl text-gray-700 font-medium">
+           ✨ หากต้องการแก้ไข หรือเพิ่มเติม <span class="text-blue-600 font-bold">สามารถกดปุ่มเครื่องหมาย + </span> ในหัวข้อด้านล่างได้เลย
+        </p>
+      `;
+      container.appendChild(tipDiv);
+    }
+
+    // 1. Primary Categories (Top)
+    const primaryCats = ['subject', 'style'];
+    primaryCats.forEach(cat => renderCategoryField(cat, container));
+
+    // Divider
+    const divider = document.createElement("div");
+    divider.className = "col-span-1 md:col-span-2 lg:col-span-3 border-t pt-2 mt-2";
+    divider.innerHTML = `<h3 class="text-gray-500 font-bold text-sm uppercase tracking-wider">รายละเอียดเพิ่มเติม (Extra Details)</h3>`;
+    container.appendChild(divider);
+
+    // 2. Secondary Categories (Bottom)
+    const secondaryCats = ['action_pose', 'attributes', 'environment_setting', 'composition_framing', 'lighting', 'camera', 'mood', 'negative_prompt'];
+    secondaryCats.forEach(cat => renderCategoryField(cat, container));
+  }
+
+
+  function renderCategoryField(cat, container) {
+    const categoryMap = {
+      'subject': 'สิ่งที่ต้องการ (Subject)',
+      'action_pose': 'ท่าทาง (Action & Pose)',
+      'attributes': 'รายละเอียด (Attributes)',
+      'environment_setting': 'ฉากหลัง (Environment)',
+      'composition_framing': 'การจัดวางภาพ (Composition)',
+      'style': 'สไตล์ภาพ (Style)',
+      'lighting': 'แสง (Lighting)',
+      'camera': 'มุมกล้อง (Camera)',
+      'mood': 'อารมณ์ (Mood)',
+      'negative_prompt': 'สิ่งที่ไม่ต้องการ (Negative Prompt)'
+    };
+
+    const data = aiAssistData[cat] || { current: "", suggestions: [] };
+    const label = categoryMap[cat] || (cat.charAt(0).toUpperCase() + cat.slice(1));
+
+    const div = document.createElement("div");
+    div.className = "flex flex-col gap-2";
+
+    let suggestionsHtml = "";
+    if (data.suggestions && data.suggestions.length > 0) {
+      suggestionsHtml = `
+        <div class="flex flex-wrap gap-2 mt-1">
+          ${data.suggestions.map(s => `
+            <button type="button" onclick="selectSuggestion('${cat}', '${s.replace(/'/g, "\\'")}')"
+              class="px-2 py-1 text-xs bg-gray-100 hover:bg-gray-200 rounded border text-gray-700 transition">
+              + ${s}
+            </button>
+          `).join("")}
+        </div>
+      `;
+    }
+
+    div.innerHTML = `
+      <label class="font-semibold text-gray-700">${label}</label>
+      <textarea id="input-${cat}" rows="2"
+        class="w-full border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+        placeholder="ระบุ ${label}..."
+      >${data.current || ""}</textarea>
+      ${suggestionsHtml}
+    `;
+
+    container.appendChild(div);
+  }
+
+  // AI Prompt (เวอร์ชันเดียว + Modal)
+  let selectedStyle = ""; // เก็บค่า Style ชั่วคราว
+
+  // AI Prompt (Wizard Flow)
+  function askAIPromptAssist() {
+    closeSidebarPanel(); // Auto close sidebar
+    // 1. เปิด Modal เลือกสไตล์ก่อน
+    openStyleModal();
+  }
+
+  function openStyleModal() {
+    const modal = document.getElementById("styleSelectionModal");
+    modal.classList.remove("hidden");
+    modal.classList.add("flex");
+  }
+
+  function closeStyleModal() {
+    const modal = document.getElementById("styleSelectionModal");
+    modal.classList.add("hidden");
+    modal.classList.remove("flex");
+  }
+
+  // 2. เมื่อเลือกสไตล์ -> ไปเลือก Subject ต่อ
+  function nextToSubject(style) {
+    if (!style) {
+      alert("กรุณาระบุสไตล์");
+      return;
+    }
+    selectedStyle = style;
+    closeStyleModal();
+    openSubjectModal();
+  }
+
+  function openSubjectModal() {
+    const modal = document.getElementById("subjectSelectionModal");
+    modal.classList.remove("hidden");
+    modal.classList.add("flex");
+  }
+
+  function closeSubjectModal() {
+    const modal = document.getElementById("subjectSelectionModal");
+    modal.classList.add("hidden");
+    modal.classList.remove("flex");
+  }
+
+  // 3. เมื่อเลือก Subject -> เริ่มวิเคราะห์
+  async function confirmFinalGeneration(subject) {
+    if (!subject) {
+      alert("กรุณาระบุสิ่งที่ต้องการ (Subject)");
+      return;
+    }
+    closeSubjectModal();
+
+    // อัปเดตค่าลงใน input หลัก (ถ้าผู้ใช้ไม่ได้พิมพ์มาเอง การเลือก Subject จะถือเป็น Prompt หลัก)
+    // หรือถ้ามี Prompt เดิม อาจจะใช้ Subject นี้ไปประกอบก็ได้
+    const mainInput = document.getElementById("mainPromptInput");
+
+    // ถ้า Prompt ว่างอยู่ ให้ใช้ Subject ที่เลือกเป็น Prompt ตั้งต้น
+    // ถ้าไม่ว่าง ก็ถือว่า Subject ที่เลือกมาช่วยขยายความ
+    if (!mainInput.value.trim()) {
+      mainInput.value = subject;
+      autoExpand(mainInput);
+    }
+
+    const baseIdea = mainInput.value.trim(); // ใช้ค่าปัจจุบันในกล่อง (ซึ่งอาจจะเพิ่งเติม subject เมื่อกี้)
+    const csrf = document.querySelector("[name=csrfmiddlewaretoken]").value;
+    const inputEl = document.getElementById("mainPromptInput");
+    const oldPlaceholder = inputEl.placeholder;
+
+    showLoadingBox(`AI กำลังวิเคราะห์สไตล์ '${selectedStyle}' หัวข้อ '${subject}'...`);
+
+    try {
+      const res = await fetch("{% url 'call_agent_assist' %}", {
+        method: "POST",
+        headers: {
+          "X-Requested-With": "XMLHttpRequest",
+          "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8"
+        },
+        body: new URLSearchParams({
+          csrfmiddlewaretoken: csrf,
+          topic: baseIdea,
+          style: selectedStyle,
+          intended_subject: subject // ส่ง Subject ที่เลือกไปด้วย
+        })
+      });
+
+      const data = await res.json();
+
+      if (data.status === "success") {
+        aiAssistData = data.data || {};
+
+        // ถ้าผู้ใช้เลือก Style มาแล้ว ให้ใส่เป็นค่าเริ่มต้นในช่อง Style ด้วย
+        if (selectedStyle) {
+          if (!aiAssistData['style']) aiAssistData['style'] = { current: "", suggestions: [] };
+          if (!aiAssistData['style'].current) {
+            aiAssistData['style'].current = selectedStyle;
+          }
+        }
+
+        renderAiAssistModal(baseIdea);
+        openAiAssistModal();
+      } else {
+        alert(data.message || "AI ไม่สามารถวิเคราะห์ได้");
+      }
+
+    } catch (e) {
+      console.error(e);
+      alert("เกิดข้อผิดพลาดในการเรียก AI");
+    } finally {
+      inputEl.placeholder = oldPlaceholder;
+      hideLoadingBox();
+      selectedStyle = ""; // Reset
+    }
+  }
+
+  function selectSuggestion(category, value) {
+    const input = document.getElementById(`input-${category}`);
+    if (input) {
+      let current = input.value.trim();
+      if (current) {
+        if (!current.includes(value)) {
+          input.value = current + ", " + value;
+        }
+      } else {
+        input.value = value;
+      }
+    }
+  }
+
+  // REMIX HISTORY
+  function remixHistory(btn) {
+    if (!confirm("ต้องการโหลดการตั้งค่าจากรูปนี้หรือไม่? (ค่าปัจจุบันจะถูกแทนที่)")) return;
+
+    const dataset = btn.dataset;
+    // Decode basic entities if needed, though escapejs usually enough. 
+    // escapejs produces u00XX sequences for unicode? No, it escapes chars for JS string.
+    // For safety, we trust value.
+    const prompt = dataset.prompt;
+    const negative = dataset.negative;
+    const seed = dataset.seed;
+    const modelId = dataset.model;
+    const dimId = dataset.dimension;
+
+    // Set Prompt
+    const mainInput = document.getElementById("mainPromptInput");
+    mainInput.value = prompt;
+    autoExpand(mainInput);
+    document.getElementById("promptInput").value = prompt;
+
+    // Set Negative
+    const negInput = document.getElementById("negativePromptInput");
+    if (negInput) negInput.value = negative;
+    const negHidden = document.getElementById("negativeInput");
+    if (negHidden) negHidden.value = negative;
+
+    // Set Seed
+    document.getElementById("seedInput").value = seed;
+
+    // Set Model
+    const modelSelect = document.getElementById("modelSelect");
+    if (modelSelect) {
+      modelSelect.value = modelId;
+      selectModel(modelId); // Helper to set hidden input
+    }
+
+    // Set Dimension
+    // Find the button with this dimID and click it
+    const dimBtns = document.querySelectorAll(".dimension-btn");
+    dimBtns.forEach(b => {
+      // onclick="selectDimension(this, 'ID')"
+      if (b.getAttribute("onclick").includes(`'${dimId}'`)) {
+        b.click();
+      }
+    });
+
+    closeBox('historyBox');
+  }
+
+  // DELETE HISTORY
+  async function deleteHistory(id) {
+    if (!confirm("คุณแน่ใจว่าต้องการลบรูปนี้?")) return;
+
+    try {
+      const csrf = document.querySelector("[name=csrfmiddlewaretoken]").value;
+      const res = await fetch(`/generate/delete-history/${id}/`, {
+        method: "POST",
+        headers: {
+          "X-CSRFToken": csrf,
+          "Content-Type": "application/json"
+        }
+      });
+      const data = await res.json();
+      if (data.status === "success") {
+        const card = document.getElementById(`history-card-${id}`);
+        if (card) card.remove();
+      } else {
+        alert("ลบไม่สำเร็จ: " + (data.message || "Unknown error"));
+      }
+    } catch (e) {
+      console.error(e);
+      alert("เกิดข้อผิดพลาดในการลบ");
+    }
+  }
+
+  // จัดการให้ดาวในแต่ละการ์ด
+  function setupRating(card, historyId) {
+    const starsBox = card.querySelector(".rating-stars");
+    const starButtons = card.querySelectorAll(".star-btn");
+    const shareBtn = card.querySelector(".share-btn");
+
+    if (!starsBox || !starButtons.length || !shareBtn) return;
+
+    starButtons.forEach(btn => {
+      btn.addEventListener("click", () => {
+        const value = parseInt(btn.getAttribute("data-value") || "0", 10);
+        starsBox.dataset.rating = value.toString();
+
+        // อัปเดตรูปดาว (★ = เลือก, ☆ = ยังไม่เลือก)
+        starButtons.forEach(sb => {
+          const v = parseInt(sb.getAttribute("data-value") || "0", 10);
+          sb.textContent = v <= value ? "★" : "☆";
+        });
+        // เปิดให้ Share ได้จริง
+        shareBtn.classList.remove("opacity-50", "cursor-not-allowed", "bg-blue-400");
+        shareBtn.classList.add("bg-blue-600");
+      });
+    });
+  }
+
+  // แชร์โดยบังคับให้มี rating ก่อน
+  function shareWithRating(historyId) {
+    const starsBox = document.querySelector(`.rating-stars[data-history-id="${historyId}"]`);
+    const rating = parseInt(starsBox?.dataset.rating || "0", 10);
+    if (!rating) {
+      alert("กรุณาให้ดาวรูปนี้ก่อนแชร์");
+      return;
+    }
+    // ส่ง rating ไปกับ URL
+    window.location.href = `/generate/share/${historyId}/?rating=${rating}`;
+  }
+
+  function openAiAssistModal() {
+    closeSidebarPanel();
+    const modal = document.getElementById("aiAssistModal");
+    modal.classList.remove("hidden");
+    modal.classList.add("flex");
+  }
+
+  // Auto-run if URL params are present (Remix from Feed)
+  window.addEventListener('DOMContentLoaded', () => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.has('prompt')) {
+      const prompt = params.get('prompt');
+      const negative = params.get('negative') || "";
+      const seed = params.get('seed') || "";
+      const modelName = params.get('model') || "";
+
+      // Set Prompt
+      const mainInput = document.getElementById("mainPromptInput");
+      if (mainInput) {
+        mainInput.value = prompt;
+        autoExpand(mainInput);
+        document.getElementById("promptInput").value = prompt;
+      }
+
+      // Set Negative
+      document.getElementById("negativePromptInput").value = negative;
+      if (document.getElementById("negativeInput")) document.getElementById("negativeInput").value = negative;
+
+      // Set Seed
+      document.getElementById("seedInput").value = seed;
+
+      // Set Model by Name
+      if (modelName) {
+        const select = document.getElementById("modelSelect");
+        if (select) {
+          for (let i = 0; i < select.options.length; i++) {
+            if (select.options[i].text === modelName) {
+              select.selectedIndex = i;
+              selectModel(select.options[i].value); // update hidden
+              break;
+            }
+          }
+        }
+      }
+    }
+  });
+
+  function closeAiAssistModal() {
+    const modal = document.getElementById("aiAssistModal");
+    modal.classList.add("hidden");
+    modal.classList.remove("flex");
+  }
+
+  function applyAiAssist() {
+    const input = document.getElementById("mainPromptInput");
+    const hiddenPrompt = document.getElementById("promptInput");
+
+    // Collect all inputs
+    let parts = [];
+    const categories = ['subject', 'action_pose', 'attributes', 'environment_setting', 'composition_framing', 'style', 'lighting', 'camera', 'mood', 'negative_prompt'];
+
+    categories.forEach(key => {
+      const catInput = document.getElementById(`input-${key}`);
+      if (catInput && catInput.value.trim()) {
+        if (key === 'negative_prompt') {
+          const negVal = catInput.value.trim();
+          const negInput = document.getElementById('negativeInput');
+          if (negInput) negInput.value = negVal;
+          const negVisible = document.getElementById('negativePromptInput');
+          if (negVisible) negVisible.value = negVal;
+        } else {
+          parts.push(catInput.value.trim());
+        }
+      }
+    });
+
+    const finalPrompt = parts.join(", ");
+
+    input.value = finalPrompt;
+    if (hiddenPrompt) hiddenPrompt.value = finalPrompt;
+
+    // Trigger auto expand
+    autoExpand(input);
+
+    closeAiAssistModal();
+  }
+
+
+
+</script>
+
+{% endblock %}

@@ -1,0 +1,55 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="container mx-auto px-4 py-8">
+    <div class="flex justify-between items-center mb-6">
+        <h1 class="text-2xl font-bold text-gray-800">{{ title }}</h1>
+        <a href="{% url 'admin_dashboard' %}" class="px-4 py-2 bg-gray-200 text-gray-700 rounded hover:bg-gray-300">
+            &larr; Back to Dashboard
+        </a>
+    </div>
+
+    <div class="bg-white shadow rounded-lg overflow-hidden">
+        <table class="min-w-full divide-y divide-gray-200">
+            <thead class="bg-gray-50">
+                <tr>
+                    {% for header in headers %}
+                    <th scope="col"
+                        class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        {{ header }}
+                    </th>
+                    {% endfor %}
+                    <th scope="col"
+                        class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Actions
+                    </th>
+                </tr>
+            </thead>
+            <tbody class="bg-white divide-y divide-gray-200">
+                {% for row in rows %}
+                <tr>
+                    {% for cell in row.data %}
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
+                        {{ cell|safe }}
+                    </td>
+                    {% endfor %}
+                    <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                        <form action="{% url delete_url_name pk=row.id %}" method="POST" class="inline"
+                            onsubmit="return confirm('Are you sure you want to delete this item?');">
+                            {% csrf_token %}
+                            <button type="submit" class="text-red-600 hover:text-red-900">Delete</button>
+                        </form>
+                    </td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="{{ headers|length|add:'1' }}" class="px-6 py-4 text-center text-gray-500">
+                        No data available.
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

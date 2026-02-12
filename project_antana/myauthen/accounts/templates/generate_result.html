@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="max-w-5xl mx-auto mt-10">
+
+  <h1 class="text-2xl font-bold mb-4">ผลลัพธ์การสร้างภาพ</h1>
+
+  <p>Model: {{ model }}</p>
+  <p>Seed: {{ seed }}</p>
+  <p>Prompt: {{ positive }}</p>
+  <p>Negative Prompt: {{ negative }}</p>
+
+  <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mt-6">
+    {% for img in images %}
+      <div class="bg-white shadow rounded p-2">
+        <img src="{{ img }}" class="w-full rounded">
+      </div>
+    {% endfor %}
+  </div>
+
+  <a href="{% url 'generate_view' %}"
+     class="mt-6 inline-block px-4 py-2 bg-gray-300 rounded">
+     สร้างใหม่
+  </a>
+
+</div>
+{% endblock %}

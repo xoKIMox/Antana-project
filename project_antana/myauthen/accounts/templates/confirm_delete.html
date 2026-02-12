@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% block title %}ยืนยันการลบบัญชี{% endblock %}
+{% block content %}
+<div class="bg-white shadow rounded p-6 border border-red-400">
+  <h2 class="text-2xl font-bold text-red-700 mb-4">คุณแน่ใจหรือไม่ที่จะลบบัญชี?</h2>
+  <p class="text-gray-700 mb-6">การกระทำนี้ไม่สามารถย้อนกลับได้ และข้อมูลทั้งหมดจะถูกลบถาวร</p>
+
+  <form method="POST">
+    {% csrf_token %}
+    <button type="submit" class="bg-red-600 text-white px-4 py-2 rounded hover:bg-red-700">
+      ยืนยันการลบ
+    </button>
+    <a href="{% url 'settings' %}" class="ml-4 text-gray-600 hover:underline">ยกเลิก</a>
+  </form>
+</div>
+  <aside id="subSidebar" class="hidden w-56 bg-gray-50 border-r shadow-inner flex flex-col">
+    <div class="p-4 border-b">
+      <h3 class="font-semibold">เมนูย่อย</h3>
+    </div>
+    <nav class="flex-1 p-3">
+      <ul class="space-y-2">
+        <li>
+          <a href="#" class="block px-3 py-2 rounded hover:bg-gray-200">Models</a>
+        </li>
+        <li>
+          <a href="#" class="block px-3 py-2 rounded hover:bg-gray-200">Dimensions</a>
+        </li>
+        <li>
+          <a href="#" class="block px-3 py-2 rounded hover:bg-gray-200">Number of Images</a>
+        </li>
+      </ul>
+    </nav>
+  </aside>
+<script>
+function toggleSubMenu() {
+  const sub = document.getElementById("subSidebar");
+  sub.classList.toggle("hidden");
+}
+</script>
+{% endblock %}

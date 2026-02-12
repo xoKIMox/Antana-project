@@ -1,0 +1,64 @@
+
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <title>แก้ไขโปรไฟล์</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 min-h-screen flex items-center justify-center">
+
+  <div class="bg-white shadow-lg rounded-lg p-8 w-full max-w-md">
+    <h2 class="text-2xl font-bold text-center mb-6">แก้ไขข้อมูลบัญชีผู้ใช้</h2>
+
+    <!-- แสดงข้อความแจ้งเตือน -->
+    {% comment %} {% if messages %}
+  {% for message in messages %}
+    {% if 'success' in message.tags %}
+      <div class="bg-green-100 text-green-700 px-3 py-2 rounded mb-2">
+        {{ message }}
+      </div>
+    {% endif %}
+  {% endfor %}
+{% endif %} {% endcomment %}
+
+    <form method="POST" enctype="multipart/form-data" class="space-y-4">
+      {% csrf_token %}
+
+      <!-- รูปโปรไฟล์ -->
+      <div>
+        <label class="block font-semibold mb-1">รูปโปรไฟล์</label>
+        <input type="file" name="profile_image"
+               class="block w-full text-sm text-gray-700 border rounded cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500">
+      </div>
+
+      <!-- Username -->
+      <div>
+        <label class="block font-semibold mb-1">Username</label>
+        <input type="text" name="username" value="{{ user.username }}" required
+               class="w-full border rounded px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:outline-none">
+      </div>
+
+      <!-- Email -->
+      <div>
+        <label class="block font-semibold mb-1">Email</label>
+        <input type="email" name="email" value="{{ user.email }}" required
+               class="w-full border rounded px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:outline-none">
+      </div>
+
+      <!-- ปุ่มบันทึก -->
+      <button type="submit"
+              class="w-full bg-blue-600 text-white font-semibold py-2 rounded hover:bg-blue-700 transition">
+        บันทึกการเปลี่ยนแปลง
+      </button>
+    </form>
+
+    <!-- ลิงก์เพิ่มเติม -->
+    <div class="mt-6 flex justify-between text-sm">
+      <a href="{% url 'change_password' %}" class="text-blue-600 hover:underline">แก้ไขรหัสผ่าน</a>
+      <a href="{% url 'user_profile' user.username %}" class="text-gray-600 hover:underline">← กลับไปหน้าโปรไฟล์</a>
+    </div>
+  </div>
+
+</body>
+</html>

@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block content %}
+<div class="max-w-xl mx-auto bg-white p-6 rounded-lg shadow mt-10">
+  <h1 class="text-2xl font-bold mb-4 text-gray-800">แก้ไขโพสต์</h1>
+{% if post.history and post.history.image_url %}
+  <div class="mb-4">
+    <img src="{{ post.history.image_url }}" alt="Post Image" class="rounded-lg w-full max-w-md shadow">
+  </div>
+{% else %}
+  <p class="text-sm text-red-500">ไม่พบรูปภาพเดิม</p>
+{% endif %}
+
+  <form method="POST">
+    {% csrf_token %}
+    
+    <div class="mb-4">
+      <label class="block text-gray-700 font-medium mb-1">ชื่อภาพ (title):</label>
+      <input type="text" name="title" value="{{ form.title.value }}" class="w-full border rounded px-3 py-2">
+    </div>
+
+    <div class="mb-4">
+      <label class="block text-gray-700 font-medium mb-1">คำบรรยาย (caption):</label>
+      <textarea name="caption" rows="5" class="w-full border rounded px-3 py-2">{{ form.caption.value }}</textarea>
+    </div>
+
+    <button type="submit" class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded">
+      บันทึกการเปลี่ยนแปลง
+    </button>
+    
+    <a href="{% url 'user_profile' user.username %}" class="ml-3 text-gray-600 hover:text-gray-900">ยกเลิก</a>
+
+  </form>
+  <form method="POST" action="{% url 'delete_post' post.id %}" onsubmit="return confirm('คุณแน่ใจว่าต้องการลบโพสต์นี้หรือไม่?');">
+  {% csrf_token %}
+  <button type="submit" class="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded mt-4">
+    ลบโพสต์
+  </button>
+</form>
+
+</div>
+{% endblock %}

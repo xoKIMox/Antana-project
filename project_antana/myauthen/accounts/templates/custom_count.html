@@ -1,0 +1,112 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="max-w-5xl mx-auto p-6">
+  <h1 class="text-2xl font-bold mb-6">จัดการ Number of Images</h1>
+
+  <div class="overflow-x-auto bg-white shadow rounded-lg">
+    <table class="w-full text-left border-collapse">
+      <thead class="bg-gray-100 text-gray-700">
+        <tr>
+          <th class="p-3 border-b">Value</th>
+          <th class="p-3 border-b text-center">Status</th>
+          <th class="p-3 border-b text-center">Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for c in counts %}
+        <tr class="hover:bg-gray-50 transition">
+          <td class="p-3 border-b">{{ c.value }}</td>
+          <td class="p-3 border-b text-center">
+            {% if c.is_active %}
+            <span class="text-green-600 font-semibold">Active</span>
+            {% else %}
+            <span class="text-red-600 font-semibold">Suspended</span>
+            {% endif %}
+          </td>
+          <td class="p-3 border-b text-center">
+            <a href="{% url 'toggle_count' c.id %}" class="text-blue-600 hover:underline">
+              {% if c.is_active %} Suspend {% else %} Activate {% endif %}
+            </a> |
+            <a href="#" onclick="openCountModal('{{ c.id }}', '{{ c.value }}', '{{ c.is_active }}')"
+              class="text-yellow-600 hover:underline">Edit</a> |
+            <a href="{% url 'delete_count' c.id %}" onclick="return confirm('ลบ Count {{ c.value }} ?');"
+              class="text-red-600 hover:underline">Delete</a>
+          </td>
+        </tr>
+        {% empty %}
+        <tr>
+          <td colspan="3" class="text-center p-6 text-gray-500">ยังไม่มี Counts</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+
+
+  <!-- Pagination -->
+  {% include 'pagination.html' %}
+
+  <!-- ปุ่มเพิ่ม (Bottom Left) -->
+  <div class="mt-6">
+    <button onclick="openCountModal()"
+      class="bg-gray-900 text-white px-4 py-2 rounded-lg shadow hover:bg-black transition">
+      + Add Count
+    </button>
+  </div>
+
+  <!-- ปุ่มเพิ่ม -->
+</div>
+<div id="countModal" class="hidden fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+  <div class="bg-white w-full max-w-md rounded-lg shadow-lg p-6">
+    <h2 id="countModalTitle" class="text-lg font-bold mb-4 text-black">เพิ่ม Count ใหม่</h2>
+    <form id="countForm" method="POST" action="{% url 'add_count' %}" class="space-y-4">
+      {% csrf_token %}
+      <div>
+        <label class="block font-medium">Value</label>
+        <input type="number" name="value" id="countValue" required class="w-full border rounded-lg px-3 py-2">
+      </div>
+      <div>
+        <label class="block font-medium">Status</label>
+        <select name="is_active" id="countStatus" class="w-full border rounded-lg px-3 py-2">
+          <option value="true">Active</option>
+          <option value="false">Suspended</option>
+        </select>
+      </div>
+      <div class="flex justify-end gap-3">
+        <button type="button" onclick="closeCountModal()"
+          class="px-4 py-2 rounded-lg border hover:bg-gray-100">Cancel</button>
+        <button type="submit" class="px-4 py-2 rounded-lg bg-gray-900 text-white hover:bg-black">Save</button>
+      </div>
+    </form>
+  </div>
+</div>
+<script>
+  function openCountModal(id = null, value = '', isActive = 'true') {
+    const modal = document.getElementById("countModal");
+    const form = document.getElementById("countForm");
+    const title = document.getElementById("countModalTitle");
+
+    if (id) {
+      // Edit Mode
+      title.textContent = "แก้ไข Count";
+      form.action = `/edit-count/${id}/`;
+      document.getElementById("countValue").value = value;
+      document.getElementById("countStatus").value = (isActive === "True" || isActive === "true") ? "true" : "false";
+    } else {
+      // Add Mode
+      title.textContent = "เพิ่ม Count ใหม่";
+      form.action = "{% url 'add_count' %}";
+      document.getElementById("countValue").value = "";
+      document.getElementById("countStatus").value = "true";
+    }
+
+    modal.classList.remove("hidden");
+  }
+
+  function closeCountModal() {
+    document.getElementById("countModal").classList.add("hidden");
+  }
+</script>
+
+{% endblock %}

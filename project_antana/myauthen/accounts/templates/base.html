@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="th">
+
+  <head>
+    <meta charset="UTF-8">
+    <title>{% block title %}Artana{% endblock %}</title>
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <script src="https://cdn.tailwindcss.com"></script>
+  </head>
+
+  <body
+    class="min-h-screen flex flex-col bg-[linear-gradient(to_right,#e5e7eb_1px,transparent_1px),linear-gradient(to_bottom,#e5e7eb_1px,transparent_1px)] bg-[size:40px_40px]">
+
+    <!-- แถบบน (Topbar) -->
+    <header class="fixed top-0 left-0 right-0 h-16 bg-white shadow flex items-center justify-between px-6 z-50">
+      <div class="text-2xl font-bold">Artana</div>
+      <div class="ml-auto flex items-center gap-4">
+        {% if user.is_authenticated %}
+        <a href="{% url 'user_profile' user.username %}" class="flex items-center gap-3 group">
+          {% if user.profile.profile_image %}
+          <img src="{{ user.profile.profile_image.url }}" alt="{{ user.username }}"
+            class="w-10 h-10 rounded-full object-cover shadow ring-2 ring-white group-hover:ring-blue-500">
+          {% else %}
+          <div
+            class="w-10 h-10 rounded-full bg-gray-400 flex items-center justify-center text-white text-sm font-semibold shadow ring-2 ring-white group-hover:bg-blue-500">
+            {{ user.username|slice:":1" }}
+          </div>
+          {% endif %}
+          <span class="text-base font-medium text-gray-800 group-hover:underline">
+            {{ user.username }}
+          </span>
+        </a>
+        <a href="{% url 'logout' %}" class="text-sm text-red-600 hover:underline">Logout</a>
+        {% else %}
+        <a href="{% url 'login' %}" class="text-sm text-blue-600 hover:underline">Login</a>
+        {% endif %}
+      </div>
+    </header>
+
+    <div class="flex">
+      <!-- Sidebar -->
+      <aside class="fixed top-16 left-0 h-[calc(100vh-4rem)] w-64 bg-white border-r shadow flex-shrink-0 z-40">
+
+        <nav class="flex-1 p-4 space-y-2">
+          <a href="{% url 'post_feed' %}" class="block px-3 py-2 rounded hover:bg-gray-100">Prompt Lab</a>
+          <a href="{% url 'generate' %}" class="block px-3 py-2 rounded hover:bg-gray-100">Generate</a>
+          <a href="{% url 'settings' %}" class="block px-3 py-2 rounded hover:bg-gray-100">Settings</a>
+          {% if user.is_authenticated and user.is_staff %}
+          <button onclick="toggleSubSidebar()" class="block w-full text-left px-3 py-2 rounded bg-red-600 text-white">
+            Admin
+          </button>
+          {% endif %}
+        </nav>
+      </aside>
+
+
+      <aside id="subSidebar"
+        class="hidden fixed top-16 left-64 h-[calc(100vh-4rem)] w-56 bg-gray-50 border-r shadow-inner z-30">
+        <div class="p-4 border-b font-semibold">Admin Settings</div>
+        <nav class="p-3 space-y-2">
+          <a href="{% url 'admin_dashboard' %}" class="block px-3 py-2 hover:bg-gray-200">Dashboard</a>
+          <a href="{% url 'custom_admin' %}" class="block px-3 py-2 hover:bg-gray-200">Members</a>
+          <a href="{% url 'custom_model' %}" class="block px-3 py-2 hover:bg-gray-200">Custom Model</a>
+          <a href="{% url 'custom_dimension' %}" class="block px-3 py-2 hover:bg-gray-200">Dimensions</a>
+          <a href="{% url 'custom_count' %}" class="block px-3 py-2 hover:bg-gray-200">Number of Images</a>
+          <a href="{% url 'admin_tag_list' %}" class="block px-3 py-2 hover:bg-gray-200">Tags</a>
+        </nav>
+      </aside>
+
+      <!-- Content -->
+      <main class="ml-64 mt-16 flex-1 p-6">
+        {% block content %}
+        <h1 class="text-2xl font-bold mb-4">Dashboard Content</h1>
+        <p>ใส่เนื้อหา admin ของคุณตรงนี้</p>
+        {% endblock %}
+      </main>
+    </div>
+    <script>
+      function toggleSubSidebar() {
+        const sub = document.getElementById("subSidebar");
+        sub.classList.toggle("hidden");
+      }
+    </script>
+  </body>
+
+</html>

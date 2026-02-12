@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tailwind CSS Example</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+  .text-outline {
+    -webkit-text-stroke: 1px black; /* ความหนา 0.5px สีดำ */
+  }
+</style>
+</head>
+<body class="min-h-screen 
+  bg-[linear-gradient(to_right,#e5e7eb_1px,transparent_1px),linear-gradient(to_bottom,#e5e7eb_1px,transparent_1px)] 
+  bg-[size:40px_40px]">
+  <div class="flex flex-col items-center justify-center min-h-screen space-y-10 ">
+    <h1 class="text-9xl font-bold text-outline text-white drop-shadow-[0_0_0.5px_black]">Artana</h1>
+    <div class="w-[400px] h-[125px] bg-white rounded-xl flex items-center justify-center text-gray-800 border border-gray-400 shadow-lg">
+      <div class="flex space-x-10">
+        <a href="{% url 'login' %}" class="min-w-[150px] h-12 flex items-center justify-center bg-gray-200 text-black rounded-full hover:bg-gray-400 transition border border-gray-400 shadow-lg">Login</a>
+        <a href="{% url 'register' %}" class="min-w-[150px] h-12 flex items-center justify-center bg-gray-200 text-black rounded-full hover:bg-gray-400 transition border border-gray-400 shadow-lg">Register</a>
+      </div>
+
+  </div>
+  
+</body>
+
+</html>

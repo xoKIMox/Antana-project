@@ -1,0 +1,360 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block content %}
+<main class="flex-1 p-6 overflow-y-auto">
+  <!-- ช่องค้นหา -->
+  <div class="flex justify-center mt-6">
+    <form id="searchForm" class="w-full max-w-4xl">
+      <input type="search" id="default-search" class="block w-full p-4 pl-10 text-sm border rounded-lg"
+        placeholder="ค้นหาโพสต์..." />
+    </form>
+  </div>
+
+  <h2 class="text-3xl font-bold text-gray-800 mb-6">โพสต์ทั้งหมด</h2>
+
+  <!-- ฟีดปกติ -->
+  <section id="normalFeed" class="mt-6">
+    {% if posts %}
+    <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-3 gap-6">
+      {% for post in posts %}
+      <div class="bg-white rounded-lg shadow p-4 relative">
+
+        <!-- ปุ่ม 3 จุด -->
+        {% if request.user == post.user or request.user.is_staff or request.user.is_superuser %}
+        <div class="absolute top-2 right-2">
+          <button onclick="toggleMenu({{ post.id }})"
+            class="text-gray-500 hover:text-gray-800 text-xl leading-none">⋮</button>
+
+          <div id="menu-{{ post.id }}" class="hidden absolute right-0 mt-2 w-32 bg-white border rounded shadow-lg z-10">
+
+            <!-- ปุ่มแก้ไข -->
+            <a href="{% url 'edit_post' post.id %}" class="block px-4 py-2 text-sm hover:bg-gray-100">
+              แก้ไข
+            </a>
+
+            <!-- ปุ่มลบ (ส่ง POST ผ่านฟอร์มซ่อน) -->
+            <button type="button" onclick="submitDelete({{ post.id }})"
+              class="block w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-100">
+              ลบ
+            </button>
+
+            <!-- ฟอร์มลบแบบซ่อน (POST + CSRF) -->
+            <form id="delete-form-{{ post.id }}" action="{% url 'delete_post' post.id %}" method="POST" class="hidden">
+              {% csrf_token %}
+            </form>
+
+          </div>
+        </div>
+        {% endif %}
+
+        <!-- โปรไฟล์ + เวลา -->
+        <div class="flex items-center mb-4">
+          <a href="{% url 'user_profile' post.user.username %}" class="flex items-center gap-2 group">
+            {% if post.user.profile.profile_image %}
+            <img src="{{ post.user.profile.profile_image.url }}" class="w-10 h-10 rounded-full object-cover">
+            {% else %}
+            <div class="w-10 h-10 bg-gray-300 rounded-full flex items-center justify-center text-white font-bold">
+              {{ post.user.username|slice:":1" }}
+            </div>
+            {% endif %}
+            <span class="ml-2 font-semibold text-gray-800 group-hover:underline">
+              {{ post.user.username }}
+            </span>
+          </a>
+          <span class="ml-auto text-sm text-gray-500">{{ post.created_at|timesince }} ago</span>
+        </div>
+
+        {% if post.title %}
+        <h3 class="text-lg font-bold text-gray-900 mb-2">{{ post.title }}</h3>
+        {% endif %}
+        <p class="text-gray-700 mb-3 whitespace-pre-line">{{ post.caption }}</p>
+
+        {% if post.history.image_url %}
+        <img src="{{ post.history.image_url }}" alt="Post Image" class="rounded-lg w-full mb-3">
+        {% endif %}
+
+        {% if post.tags.all %}
+        <div class="flex flex-wrap gap-2 mt-2">
+          {% for tag in post.tags.all %}
+          <span class="px-2 py-1 bg-blue-100 text-blue-800 text-xs font-semibold rounded">
+            {{ tag.name }} ({{ tag.category }})
+          </span>
+          {% endfor %}
+        </div>
+        {% endif %}
+
+        <div class="flex items-center justify-between w-full mt-4 text-gray-500 text-sm">
+          <!-- Like -->
+          <button id="like-btn-{{ post.id }}" onclick="toggleLike({{ post.id }})"
+            class="flex-1 flex justify-center items-center gap-1 hover:text-red-500 {% if request.user in post.likes.all %}text-red-500{% endif %}">
+            ❤ <span id="like-count-{{ post.id }}">{{ post.likes.count }}</span>
+          </button>
+
+          <!-- Comment -->
+          <button onclick="openCommentModal({{ post.id }})"
+            class="flex-1 flex justify-center items-center gap-1 hover:text-blue-600">
+            💬 {{ post.comments.count }}
+          </button>
+
+          <!-- Share -->
+          <a href="{% url 'share_post' post.history.id %}"
+            class="flex-1 flex justify-center items-center gap-1 hover:text-green-600">
+            🔗 แชร์
+          </a>
+
+          <!-- Remix -->
+          {% if post.history %}
+          <a href="{% url 'generate' %}?prompt={{ post.history.positive_prompt|urlencode }}&negative={{ post.history.negative_prompt|urlencode }}&seed={{ post.history.seed }}&model={{ post.history.model_name|urlencode }}&dimension={{ post.history.dimension.id }}"
+            class="flex-1 flex justify-center items-center gap-1 hover:text-purple-600">
+            ↻ รีมิกซ์
+          </a>
+          {% else %}
+          <div class="flex-1"></div>
+          {% endif %}
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+    {% else %}
+    <p class="text-gray-500">ยังไม่มีโพสต์ใด ๆ</p>
+    {% endif %}
+  </section>
+
+  <!-- ผลลัพธ์ค้นหา -->
+  <div id="searchResults" class="grid gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 mt-6"></div>
+
+  <!-- Comment Modal -->
+  <div id="commentModal" class="fixed inset-0 z-50 hidden bg-black bg-opacity-70 justify-center items-center p-4">
+    <div class="bg-white max-w-5xl w-full rounded-2xl shadow-2xl p-0 relative overflow-hidden flex max-h-[90vh]">
+      <button onclick="closeCommentModal()"
+        class="absolute top-2 right-2 text-gray-500 hover:text-red-500 z-10 p-2">✕</button>
+      <div id="commentModalContent" class="w-full flex">Loading...</div>
+    </div>
+  </div>
+
+</main>
+
+<script>
+  function toggleMenu(postId) {
+    const menu = document.getElementById(`menu-${postId}`);
+    menu.classList.toggle("hidden");
+  }
+
+  document.addEventListener("click", function (e) {
+    document.querySelectorAll("[id^='menu-']").forEach(menu => {
+      if (!menu.contains(e.target) && !menu.previousElementSibling.contains(e.target)) {
+        menu.classList.add("hidden");
+      }
+    });
+  });
+
+  // ฟังก์ชันลบโพสต์ (ใช้ฟอร์ม POST ที่ซ่อนอยู่)
+  function submitDelete(postId) {
+    if (!confirm("ต้องการลบโพสต์นี้ใช่หรือไม่?")) return;
+
+    const form = document.getElementById(`delete-form-${postId}`);
+    if (form) {
+      form.submit();
+    }
+  }
+
+  // preload posts JSON จาก view
+  const allPosts = {{ posts_json| safe }};
+  const searchForm = document.getElementById("searchForm");
+  const searchInput = document.getElementById("default-search");
+  const searchResults = document.getElementById("searchResults");
+  const normalFeed = document.getElementById("normalFeed");
+
+  searchForm.addEventListener("submit", e => e.preventDefault());
+
+  searchInput.addEventListener("input", function () {
+    const q = this.value.trim().toLowerCase();
+
+    if (!q) {
+      searchResults.classList.add("hidden");
+      normalFeed.classList.remove("hidden");
+      return;
+    }
+
+    normalFeed.classList.add("hidden");
+    searchResults.classList.remove("hidden");
+    searchResults.innerHTML = "";
+
+    const filtered = allPosts.filter(p =>
+      (p.title && p.title.toLowerCase().includes(q)) ||
+      (p.caption && p.caption.toLowerCase().includes(q)) ||
+      (p.username && p.username.toLowerCase().includes(q))
+    );
+
+    if (!filtered.length) {
+      searchResults.innerHTML = "<p class='text-gray-500'>ไม่พบผลลัพธ์</p>";
+      return;
+    }
+
+    filtered.forEach(p => {
+      const card = document.createElement("div");
+      card.className = "bg-white rounded-lg shadow p-4 w-full";
+
+      card.innerHTML = `
+        <div class="flex items-center mb-4">
+          ${p.profile_image
+          ? `<img src="${p.profile_image}" class="w-10 h-10 rounded-full object-cover">`
+          : `<div class="w-10 h-10 bg-gray-300 rounded-full flex items-center justify-center text-white font-bold">${p.username[0]}</div>`}
+          <span class="ml-2 font-semibold text-gray-800">${p.username}</span>
+          <span class="ml-auto text-sm text-gray-500">${p.created_since} ago</span>
+        </div>
+
+        ${p.title ? `<h3 class="text-lg font-bold mb-1">${p.title}</h3>` : ""}
+        ${p.caption ? `<p class="text-gray-700 mb-3">${p.caption}</p>` : ""}
+
+        ${p.image ? `<img src="${p.image}" class="rounded-lg w-full mb-3">` : ""}
+
+        <div class="flex flex-wrap gap-2 mb-3">
+          ${(p.tags || []).map(tag =>
+            `<span class="px-2 py-1 text-xs bg-blue-100 text-blue-700 rounded">${tag}</span>`
+          ).join("")}
+        </div>
+
+        <div class="flex items-center justify-between w-full mt-4 text-gray-500 text-sm">
+          <button id="like-btn-search-${p.id}" onclick="toggleLike(${p.id})" 
+              class="flex-1 flex justify-center items-center gap-1 hover:text-red-500 ${p.is_liked ? 'text-red-500' : ''}">
+            ❤️ <span id="like-count-search-${p.id}">${p.likes_count || 0}</span>
+          </button>
+          
+          <button onclick="openCommentModal(${p.id})" class="flex-1 flex justify-center items-center gap-1 hover:text-blue-500">
+            💬 <span>${p.comments_count || 0}</span>
+          </button>
+          
+          <a href="/generate/share-post/${p.history_id}/" class="flex-1 flex justify-center items-center gap-1 hover:text-green-600">
+             🔗 แชร์
+          </a>
+
+          <a href="/generate/?prompt=${encodeURIComponent(p.prompt)}&negative=${encodeURIComponent(p.negative)}&seed=${p.seed}&model=${encodeURIComponent(p.model)}"
+             class="flex-1 flex justify-center items-center gap-1 hover:text-purple-600">
+             ↻ รีมิกซ์
+          </a>
+        </div>
+      `;
+      searchResults.appendChild(card);
+    });
+  });
+</script>
+
+<script>
+  function openCommentModal(postId) {
+    const modal = document.getElementById('commentModal');
+    const content = document.getElementById('commentModalContent');
+
+    fetch(`/post/${postId}/comment-modal/`)
+      .then(response => response.text())
+      .then(html => {
+        content.innerHTML = html;
+        modal.classList.remove('hidden');
+        modal.classList.add('flex');
+      });
+  }
+
+  function closeCommentModal() {
+    const modal = document.getElementById('commentModal');
+    modal.classList.remove('flex');
+    modal.classList.add('hidden');
+  }
+
+  async function toggleLike(postId) {
+    try {
+      // get csrf
+      const csrf = document.querySelector('[name=csrfmiddlewaretoken]')?.value || '';
+      // Note: If csrf not found in form, might need to fetch it from cookie or meta.
+      // In `post_feed.html`, there is a csrf in delete form {% csrf_token %} inside loop.
+      // BUT if we click search result, maybe delete form not present?
+      // We can assume there is at least one csrf token on page if authenticated.
+      // Or we can add <input type="hidden" name="csrfmiddlewaretoken" ...> globally.
+
+      let token = csrf;
+      if (!token) {
+        const input = document.querySelector('input[name="csrfmiddlewaretoken"]');
+        if (input) token = input.value;
+      }
+
+      const res = await fetch(`/post/${postId}/toggle-like/`, {
+        method: 'POST',
+        headers: {
+          'X-CSRFToken': token
+        }
+      });
+      const data = await res.json();
+
+      // Update all buttons for this post (in feed and search)
+      const ids = [`like-btn-${postId}`, `like-btn-search-${postId}`];
+      const spans = [`like-count-${postId}`, `like-count-search-${postId}`];
+
+      ids.forEach(id => {
+        const btn = document.getElementById(id);
+        if (btn) {
+          if (data.liked) btn.classList.add('text-red-500');
+          else btn.classList.remove('text-red-500');
+        }
+      });
+
+      spans.forEach(id => {
+        const span = document.getElementById(id);
+        if (span) span.innerText = data.count;
+      });
+
+    } catch (e) { console.error(e); }
+  }
+
+  // --- Comment Menu Actions (Moved from modal) ---
+  function toggleCommentMenu(commentId) {
+    const menu = document.getElementById(`comment-menu-${commentId}`);
+    // Hide all other menus first
+    document.querySelectorAll("[id^='comment-menu-']").forEach(m => {
+      if (m.id !== `comment-menu-${commentId}`) m.classList.add("hidden");
+    });
+    menu && menu.classList.toggle("hidden");
+  }
+
+  function editComment(commentId) {
+    // Hide menu
+    document.getElementById(`comment-menu-${commentId}`).classList.add("hidden");
+
+    // Switch to edit mode
+    document.getElementById(`comment-view-${commentId}`).classList.add("hidden");
+    document.getElementById(`comment-edit-form-${commentId}`).classList.remove("hidden");
+  }
+
+  function cancelEditComment(commentId) {
+    // Switch back to view mode
+    document.getElementById(`comment-view-${commentId}`).classList.remove("hidden");
+    document.getElementById(`comment-edit-form-${commentId}`).classList.add("hidden");
+  }
+
+  function deleteComment(commentId) {
+    if (confirm("ต้องการลบความคิดเห็นนี้ใช่หรือไม่?")) {
+      document.getElementById(`comment-delete-form-${commentId}`).submit();
+    } else {
+      // Hide menu if cancelled
+      document.getElementById(`comment-menu-${commentId}`).classList.add("hidden");
+    }
+  }
+
+  // Click outside to close menus
+  document.addEventListener("click", function (e) {
+    // Close Post Menus
+    document.querySelectorAll("[id^='menu-']").forEach(menu => {
+      if (!menu.contains(e.target) && !menu.previousElementSibling.contains(e.target)) {
+        menu.classList.add("hidden");
+      }
+    });
+
+    // Close Comment Menus
+    if (!e.target.closest("button[onclick^='toggleCommentMenu']")) {
+      document.querySelectorAll("[id^='comment-menu-']").forEach(menu => {
+        menu.classList.add("hidden");
+      });
+    }
+  });
+</script>
+
+{% endblock %}

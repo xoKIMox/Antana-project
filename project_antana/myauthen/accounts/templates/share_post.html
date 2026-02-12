@@ -1,0 +1,106 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block content %}
+<div class="max-w-3xl mx-auto mt-10 p-6 bg-white rounded shadow">
+
+  <h1 class="text-2xl font-bold mb-4">แชร์โพสต์</h1>
+
+  <!-- แสดงรูปภาพ -->
+  {% if history.image_url %}
+    <img src="{{ history.image_url }}" alt="Generated Image" class="rounded mb-4 w-full max-h-[400px] object-cover">
+  {% endif %}
+
+  <form method="POST">
+    {% csrf_token %}
+
+    <!-- ไม่ให้ prompt แสดงให้ผู้ใช้กรอก -->
+    <input type="hidden" name="prompt" value="{{ history.positive_prompt }}">
+
+    <!-- Title -->
+    <div class="mb-4">
+      <label class="block font-medium mb-1">ชื่อโพสต์</label>
+      <input type="text" name="title" class="w-full border rounded p-2" placeholder="เช่น สุจิตตราในสวนดอกไม้">
+    </div>
+
+    <!-- Caption -->
+    <div class="mb-4">
+      <label class="block font-medium mb-1">คำอธิบาย</label>
+      <textarea name="caption" class="w-full border rounded p-2" rows="4">{{ default_caption }}</textarea>
+    </div>
+
+    <!-- โมเดลที่ใช้ -->
+    <div class="mb-4">
+      <label class="block text-gray-700 font-medium mb-1">โมเดลที่ใช้:</label>
+      <input type="text" name="model_used" value="{{ history.model_name }}" readonly class="w-full border rounded px-3 py-2 bg-gray-100 text-gray-600">
+    </div>
+
+    <!-- แท็ก -->
+    <div class="mb-6">
+      <label class="block font-medium mb-2">แท็กที่ระบบดึงมา</label>
+      <div class="flex flex-wrap gap-2 mb-3">
+        {% for tag in extracted_tags %}
+          <span class="bg-green-100 text-green-800 text-xs font-semibold px-2.5 py-0.5 rounded-full">{{ tag.name }}</span>
+          <input type="hidden" name="tags" value="{{ tag.id }}">
+        {% endfor %}
+      </div>
+
+<!-- INPUT เพิ่มแท็ก -->
+<label class="block mb-2 font-medium text-gray-700">เพิ่มแท็กใหม่:</label>
+<div class="flex items-center gap-2 mb-2">
+  <input type="text" id="tagInput" class="border px-3 py-2 rounded w-full" placeholder="พิมพ์แท็กแล้วกด Enter">
+</div>
+
+<!-- กล่องแสดงแท็กทั้งหมด -->
+<div id="tagList" class="flex flex-wrap gap-2 mb-4"></div>
+
+<!-- เก็บแท็กทั้งหมดใน hidden input -->
+<input type="hidden" name="custom_tags" id="customTagsInput">
+
+    <button type="submit" class="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600">
+      แชร์โพสต์
+    </button>
+
+  </form>
+
+</div>
+<script>
+  let tags = [];
+
+  const tagInput = document.getElementById('tagInput');
+  const tagList = document.getElementById('tagList');
+  const hiddenInput = document.getElementById('customTagsInput');
+
+  tagInput.addEventListener('keydown', function (e) {
+    if (e.key === 'Enter' || e.key === ',' || e.key === ' ') {
+      e.preventDefault();
+      const newTag = tagInput.value.trim();
+      if (newTag && !tags.includes(newTag)) {
+        tags.push(newTag);
+        renderTags();
+        tagInput.value = '';
+      }
+    }
+  });
+
+  function renderTags() {
+    tagList.innerHTML = '';
+    tags.forEach(tag => {
+      const tagEl = document.createElement('span');
+      tagEl.className = 'bg-blue-100 text-blue-800 text-xs font-medium px-2.5 py-0.5 rounded-full flex items-center gap-2';
+      tagEl.innerHTML = `
+        ${tag}
+        <button type="button" class="ml-1 text-red-500 hover:text-red-700" onclick="removeTag('${tag}')">×</button>
+      `;
+      tagList.appendChild(tagEl);
+    });
+    hiddenInput.value = tags.join(',');  // ส่งไป backend
+  }
+
+  function removeTag(tag) {
+    tags = tags.filter(t => t !== tag);
+    renderTags();
+  }
+</script>
+
+{% endblock %}

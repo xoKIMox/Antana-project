@@ -1,0 +1,18 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<html>
+<head>
+    <h1 class="text-4xl font-bold text-red-500">ทดสอบ Tailwind</h1>
+
+    <title>Home</title>
+</head>
+<body>
+    <h2>ยินดีต้อนรับ {{ user.username }}</h2>
+    <p>คุณเข้าสู่ระบบเรียบร้อยแล้ว</p>
+    <a href="{% url 'profile' %}">เข้าสู่ PROFILE</p>
+    <a href="{% url 'generate' %}">เข้าสู่ Generate</p>
+    <a href="{% url 'post_feed' %}">เข้าสู่ post_feed</p>
+    <a href="{% url 'logout' %}">ออกจากระบบ</a>
+</body>
+</html>

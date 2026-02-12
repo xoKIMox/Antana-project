@@ -1,0 +1,12 @@
+python manage.py runserver
+.venv/scripts/activate
+npm init -y
+npm install -D tailwindcss postcss autoprefixer
+npx tailwindcss init -p
+npm install -g tailwindcss
+npm run build:css
+python manage.py shell
+เพิ่มแท็ค
+from accounts.models import Tag
+Tag.objects.create(name="แฟชั่น")
+ngrok http --domain=oakley-lumbar-alpha.ngrok-free.dev 8000

@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="th">
+  {% load socialaccount %}
+
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tailwind CSS Example</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+      .text-outline {
+        -webkit-text-stroke: 1px black;
+        /* ความหนา 0.5px สีดำ */
+      }
+    </style>
+  </head>
+
+  <body class="min-h-screen 
+  bg-[linear-gradient(to_right,#e5e7eb_1px,transparent_1px),linear-gradient(to_bottom,#e5e7eb_1px,transparent_1px)] 
+  bg-[size:40px_40px]
+  flex justify-end items-start p-4 flex-1">
+    <div class="grid grid-cols-2 gap-4 w-full h-40p-4">
+      <div class="flex items-center justify-center pl-20">
+        <h1 class="text-9xl font-bold text-outline text-white drop-shadow-[0_0_0.5px_black] ">Artana</h1>
+      </div>
+      <div class="flex items-center justify-end ">
+        <aside class="w-3/5 h-[900px] bg-white border rounded-xl shadow p-4 my-4">
+          <h2 class="text-3xl sm:text-4xl font-semibold tracking-tight text-center">Create your account</h2>
+          <p class="mt-1 text-sm text-neutral-600 text-center">Enter your Credentials to access your account</p>
+          {% if messages %}
+          {% for message in messages %}
+          <div class="mt-4 p-3 rounded {{ message.tags }} bg-green-100 text-green-800">
+            {{ message }}
+          </div>
+          {% endfor %}
+          {% endif %}
+          <form method="POST" class="mt-8 space-y-10 justify-center">
+            {% csrf_token %}
+            <div>
+              <label class="mb-1 block text-sm font-medium">Username</label>
+              <input type="text" name="username" placeholder="Enter username" required
+                class="w-full rounded-xl border border-neutral-300 px-4 py-3 outline-none focus:ring-2 focus:ring-neutral-800" />
+            </div>
+            <div>
+              <label class="mb-1 block text-sm font-medium">Email address</label>
+              <input type="email" name="email" placeholder="Enter email" required
+                class="w-full rounded-xl border border-neutral-300 px-4 py-3 outline-none focus:ring-2 focus:ring-neutral-800" />
+            </div>
+            <div>
+              <label class="mb-1 block text-sm font-medium">Password</label>
+              <input type="password" name="password" placeholder="Enter password" required
+                class="w-full rounded-xl border border-neutral-300 px-4 py-3 outline-none focus:ring-2 focus:ring-neutral-800" />
+            </div>
+            <div>
+              <label class="mb-1 block text-sm font-medium">Confirm Password</label>
+              <input type="password" name="password2" placeholder="Confirm password" required
+                class="w-full rounded-xl border border-neutral-300 px-4 py-3 outline-none focus:ring-2 focus:ring-neutral-800" />
+            </div>
+
+            <button type="submit"
+              class="w-full rounded-full border border-neutral-800 py-3 font-medium hover:shadow-md transition duration-200">Sign
+              Up</button>
+            <div class="mt-4 max-w-md mx-auto">
+              <a href="{% provider_login_url 'google' %}"
+                class="flex items-center justify-center gap-2 w-full px-4 py-2 border rounded-lg shadow-sm bg-white hover:bg-gray-50 text-decoration-none">
+                <img src="https://www.svgrepo.com/show/475656/google-color.svg" alt="Google" class="w-5 h-5" />
+                <span class="text-sm font-medium text-gray-700">Sign up with Google</span>
+              </a>
+            </div>
+          </form>
+
+          <p class="mt-6 text-center text-sm text-neutral-700">
+            Already have an account?
+            <a href="{% url 'login' %}" class="font-semibold text-blue-600 hover:underline">Log In</a>
+          </p>
+      </div>
+
+
+
+      </aside>
+    </div>
+  </body>
+
+</html>

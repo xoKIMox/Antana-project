@@ -1,0 +1,14 @@
+<div class="flex flex-wrap justify-center gap-6 w-full">
+  {% for _ in batch_range %}
+  <div
+    class="bg-white border-2 border-gray-200 rounded-2xl p-4 flex flex-col items-center justify-center w-72 shadow-sm hover:shadow-md transition">
+    <div class="w-full relative" style="aspect-ratio: {{ width }}/{{ height }};">
+      <div
+        class="absolute inset-0 border-2 border-dashed border-gray-300 rounded-xl flex items-center justify-center bg-gray-50">
+        <span class="text-gray-400 font-medium text-lg">Preview {{ forloop.counter }}</span>
+      </div>
+    </div>
+    <div class="mt-2 text-xs text-gray-400 font-mono">{{ width }} x {{ height }}</div>
+  </div>
+  {% endfor %}
+</div>
