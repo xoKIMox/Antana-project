@@ -20,7 +20,7 @@ from django.utils import timezone
 from django.utils.timesince import timesince
 from django.views.decorators.http import require_POST
 
-from .decorators import admin_required
+# from .decorators import admin_required
 from .forms import CommentForm, PostForm
 from .models import (
     Comment,
@@ -41,15 +41,25 @@ COMFY_HOST = os.environ.get("COMFY_HOST", "http://127.0.0.1:8188")
 WORKFLOW_PATH = os.path.join(os.path.dirname(__file__), "workflows", "workflows1.json")
 
 # ==========================================
+# Decorators (ย้ายมาจาก decorators.py)
+# ==========================================
+def admin_required(view_func):
+    decorated_view_func = user_passes_test(
+        lambda u: u.is_authenticated and u.is_staff,
+        login_url='/login/'
+    )(view_func)
+    return decorated_view_func
+
+# ==========================================
 # 1. ผู้ใช้งานทั่วไป
 # ==========================================
 
 def welcome_page(request):
-    return render(request, 'login_register.html')
+    return render(request, 'auth/login_register.html')
 
 @login_required(login_url= 'login')
 def home_view(request):
-    return render(request, 'home.html',{'user':request.user})
+    return render(request, 'posts/home.html',{'user':request.user})
 
 def register_view(request):
     if request.method == 'POST':
@@ -81,7 +91,7 @@ def register_view(request):
         messages.success(request, "สมัครสมาชิกสำเร็จ! กรุณาเข้าสู่ระบบ")
         return redirect('login')
 
-    return render(request, 'register.html')
+    return render(request, 'auth/register.html')
 
 def login_view(request):
     if request.method == 'POST':
@@ -97,7 +107,7 @@ def login_view(request):
             messages.error(request, "ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง")
             return redirect('login')
 
-    return render(request, 'login.html')
+    return render(request, 'auth/login.html')
         
 def logout_view(request):
     logout(request)
@@ -112,7 +122,18 @@ def logout_view(request):
 @login_required(login_url= 'login')
 def profile_view(request):
     posts = Post.objects.filter(user=request.user).select_related('history', 'user__profile').prefetch_related('tags')
-    return render(request, 'profile.html', {'posts': posts})
+    return render(request, 'profile/profile.html', {'posts': posts})
+
+
+def user_profile(request, username):
+    user_p = get_object_or_404(User, username=username)
+    posts = Post.objects.filter(user=user_p).select_related('history', 'user__profile').prefetch_related('tags').order_by('-created_at')
+    
+    return render(request, 'profile/user_profile.html', {
+        'user_profile': user_p,
+        'profile': user_p.profile,
+        'posts': posts
+    })
 
 
 @login_required(login_url='login')
@@ -134,7 +155,7 @@ def edit_profile_view(request):
         messages.success(request, 'อัปเดทข้อมลูแล้ว')
         return redirect('profile')
     
-    return render(request, 'edit_profile.html', {'user': request.user})
+    return render(request, 'profile/edit_profile.html', {'user': request.user})
 
 
 @login_required(login_url='login')
@@ -170,11 +191,11 @@ def change_password_view(request):
         messages.success(request, 'เปลี่ยนรหัสผ่านเรียบร้อยแล้ว')
         return redirect('profile')
 
-    return render(request, 'change_password.html')
+    return render(request, 'auth/change_password.html')
 
 @login_required
 def settings_view(request):
-    return render(request, "settings.html")
+    return render(request, "profile/settings.html")
 
 @login_required
 def delete_account_confirm(request):
@@ -183,7 +204,7 @@ def delete_account_confirm(request):
         user.delete()
         messages.success(request, "บัญชีถูกลบเรียบร้อยแล้ว")
         return redirect("login_register")
-    return render(request, "confirm_delete.html")
+    return render(request, "components/confirm_delete.html")
 
 # ==========================================
 # 2.2 ฟังก์ชันสร้างภาพ (Generate Image)
@@ -365,7 +386,7 @@ def generate_view(request):
 
     return render(
         request,
-        "generate.html",
+        "generate/generate.html",
         {
             "models_available": models_available,
             "dimensions": dimensions,
@@ -629,6 +650,9 @@ def generate_preview_frame(request):
         "width": width,
         "height": height,
     })
+
+
+
 
 
 
@@ -987,7 +1011,7 @@ def call_agent_assist_view(request):
 # ==========================================
 # 2.4 ฟังก์ชันโพสต์ / Community
 # ==========================================
-
+@login_required(login_url='login')
 def post_feed_view(request):
     posts = Post.objects.all().order_by('-created_at')
 
@@ -1016,7 +1040,7 @@ def post_feed_view(request):
             "model": post.history.model_name if post.history else "",
         })
 
-    return render(request, 'post_feed.html', {
+    return render(request, 'posts/post_feed.html', {
         "posts": posts,                    # ใช้ render ฟีดปกติ
         "posts_json": json.dumps(data),    # ใช้ JS filter client-side
     })
@@ -1126,7 +1150,7 @@ def share_post(request, history_id):
         return redirect("generate")
 
     default_caption = f"โพสต์จากภาพที่ฉันสร้างด้วย Prompt: {history.positive_prompt}"
-    return render(request, "share_post.html", {
+    return render(request, "posts/share_post.html", {
         "history": history,
         "default_caption": default_caption,
         "extracted_tags": extracted_tags,
@@ -1358,7 +1382,7 @@ def custom_admin(request):
         "current_filter": filter_type,
         "title": title
     }
-    return render(request, "custom_admin.html", context)
+    return render(request, "dashboard/custom_admin.html", context)
 
 @admin_required
 @require_POST
@@ -1458,7 +1482,7 @@ def custom_model(request):
     page_number = request.GET.get('page')
     page_obj = paginator.get_page(page_number)
     
-    return render(request, "custom_model.html", {
+    return render(request, "dashboard/custom_model.html", {
         "models_data": page_obj,
         "page_obj": page_obj,
     })
@@ -1520,7 +1544,7 @@ def custom_dimension(request):
         "dimensions": page_obj,
         "page_obj": page_obj,
     }
-    return render(request, "custom_dimension.html", context)
+    return render(request, "dashboard/custom_dimension.html", context)
 
 def add_dimension(request):
     if request.method == "POST":
@@ -1571,7 +1595,7 @@ def custom_count(request):
         "counts": page_obj,
         "page_obj": page_obj,
     }
-    return render(request, "custom_count.html", context)
+    return render(request, "dashboard/custom_count.html", context)
 
 def add_count(request):
     if request.method == "POST":
@@ -1690,7 +1714,7 @@ def dashboard_view(request):
         "model_usage": model_usage,
         "tag_usage": tag_usage,
     }
-    return render(request, "dashboard.html", context)
+    return render(request, "dashboard/dashboard.html", context)
 
 
 @admin_required
@@ -1714,7 +1738,7 @@ def admin_dashboard(request):
     model_usage = GenerateModel.objects.annotate(count=Count('generatehistory')).order_by('-count')[:5]
     tag_usage = Tag.objects.annotate(count=Count('posts')).order_by('-count')[:5]
 
-    return render(request, "dashboard.html", {
+    return render(request, "dashboard/dashboard.html", {
         "total_users": total_users,
         "active_users_today": active_users_today,
         "new_users_today": new_users_today,
@@ -1811,7 +1835,7 @@ def admin_post_list(request):
                 p.created_at.strftime("%Y-%m-%d %H:%M")
             ]
         })
-    return render(request, "admin_data_list.html", {
+    return render(request, "dashboard/admin_data_list.html", {
         "title": "Manage Posts",
         "headers": ["Image", "Title", "Owner", "Created At"],
         "rows": rows,
@@ -1840,7 +1864,7 @@ def admin_comment_list(request):
                 c.created_at.strftime("%Y-%m-%d %H:%M")
             ]
         })
-    return render(request, "admin_data_list.html", {
+    return render(request, "dashboard/admin_data_list.html", {
         "title": "Manage Comments",
         "headers": ["Comment", "User", "Post", "Date"],
         "rows": rows,
@@ -1878,7 +1902,7 @@ def admin_image_list(request):
                 img.model_name
             ]
         })
-    return render(request, "admin_data_list.html", {
+    return render(request, "dashboard/admin_data_list.html", {
         "title": title,
         "headers": ["Image", "Prompt", "User", "Model"],
         "rows": rows,
@@ -1914,7 +1938,7 @@ def admin_tag_list(request):
         "page_obj": page_obj,
         "current_sort": sort_param
     }
-    return render(request, "admin_tag_list.html", context)
+    return render(request, "dashboard/admin_tag_list.html", context)
 
 @admin_required
 @require_POST
@@ -1956,1654 +1980,4 @@ def admin_delete_tag(request, pk):
     tag.delete()
     messages.success(request, "Tag deleted successfully.")
     return redirect('admin_tag_list')
-
-def dashboard_view(request):
-    """
-    Admin Dashboard: Overview of system statistics.
-    Legacy version with detailed metrics.
-    """
-
-    today = timezone.now().date()
-    
-    # Basic Counters
-    total_users = User.objects.count()
-    total_posts = Post.objects.count()
-    total_comments = Comment.objects.count()
-    total_generated_images = GenerateHistory.objects.count()
-
-    # Activity Monitoring
-    active_users_today = User.objects.filter(last_login__date=today).count()
-    new_users_today = User.objects.filter(date_joined__date=today).count()
-    generated_today = GenerateHistory.objects.filter(created_at__date=today).count()
-    active_models = GenerateModel.objects.filter(is_active=True).count()
-    tags_count = Tag.objects.count()
-
-    # Recent Data
-    recent_users = User.objects.order_by('-date_joined')[:5]
-    recent_images = GenerateHistory.objects.select_related('user').order_by('-created_at')[:5]
-
-    # Model Usage Stats
-    model_usage_data = GenerateHistory.objects.values('model_name').annotate(count=Count('model_name')).order_by('-count')[:5]
-    # Calculate percentages
-    model_usage = []
-    if total_generated_images > 0:
-        for m in model_usage_data:
-            percent = (m['count'] / total_generated_images) * 100
-            model_usage.append({
-                'model_name': m['model_name'],
-                'count': m['count'],
-                'percent': round(percent, 1)
-            })
-
-    # Tag Usage Stats
-    tag_usage = Tag.objects.annotate(count=Count('posts')).order_by('-count')[:5]
-
-    context = {
-        "total_users": total_users,
-        "total_posts": total_posts,
-        "total_comments": total_comments,
-        "total_generated_images": total_generated_images,
-        "active_users_today": active_users_today,
-        "new_users_today": new_users_today,
-        "generated_today": generated_today,
-        "active_models": active_models,
-        "tags_count": tags_count,
-        "recent_users": recent_users,
-        "recent_images": recent_images,
-        "model_usage": model_usage,
-        "tag_usage": tag_usage,
-    }
-    return render(request, "dashboard.html", context)
-
-@admin_required
-def ajax_dashboard_widget(request):
-    """
-    API for Load More functionality on dashboard widgets.
-    Params: widget_type, offset, limit (default 5)
-    """
-    
-    widget_type = request.GET.get('widget_type')
-    offset = int(request.GET.get('offset', 0))
-    limit = int(request.GET.get('limit', 5))
-    
-    data = []
-    has_more = False
-    
-    if widget_type == 'images':
-        # Fetch images
-        qs = GenerateHistory.objects.select_related('user').order_by('-created_at')
-        total = qs.count()
-        # Slicing
-        items = qs[offset : offset + limit]
-        has_more = (offset + limit) < total
-        
-        for img in items:
-            data.append({
-                'user': img.user.username,
-                'model_name': img.model_name,
-                'positive_prompt': img.positive_prompt,
-                'seed': img.seed,
-                'time': timesince(img.created_at) + " ago",
-            })
-            
-    elif widget_type == 'users':
-        qs = User.objects.all().order_by('-date_joined')
-        total = qs.count()
-        items = qs[offset : offset + limit]
-        has_more = (offset + limit) < total
-        
-        for u in items:
-            data.append({
-                'username': u.username,
-                'email': u.email if u.email else "-",
-                'joined': u.date_joined.strftime("%d/%m/%Y")
-            })
-            
-    elif widget_type == 'models':
-        # Aggregation is tricky with offset if we want "most used".
-        qs = GenerateHistory.objects.values('model_name').annotate(count=Count('model_name')).order_by('-count')
-        total = qs.count()
-        items = qs[offset : offset + limit]
-        has_more = (offset + limit) < total
-        
-        for m in items:
-            data.append({
-                'model_name': m['model_name'],
-                'count': m['count']
-            })
-            
-    elif widget_type == 'tags':
-        qs = Tag.objects.annotate(count=Count('posts')).order_by('-count')
-        total = qs.count()
-        items = qs[offset : offset + limit]
-        has_more = (offset + limit) < total
-        
-        for t in items:
-            data.append({
-                'name': t.name,
-                'count': t.count
-            })
-            
-    return JsonResponse({
-        "status": "success",
-        "data": data,
-        "has_more": has_more
-    })
-
-# ==========================================
-# 3.2 จัดการสมาชิก (User Management)
-# ==========================================
-
-@admin_required
-def custom_admin(request):
-    filter_type = request.GET.get('filter')
-    today = timezone.now().date()
-
-    # หน้าแดชบอร์ดแอดมิน + รายชื่อสมาชิก
-    title = "จัดการสมาชิก (Members)"
-    if filter_type == 'active_today':
-        users_qs = User.objects.filter(last_login__date=today).order_by('-last_login')
-        title = f"จัดการสมาชิก (Active Today: {today})"
-    elif filter_type == 'new_today':
-        users_qs = User.objects.filter(date_joined__date=today).order_by('-date_joined')
-        title = f"จัดการสมาชิก (New Today: {today})"
-    else:
-        users_qs = User.objects.all().order_by("-date_joined")
-    
-    paginator = Paginator(users_qs, 5) # Show 5 users per page
-    page_number = request.GET.get('page')
-    page_obj = paginator.get_page(page_number)
-        
-    context = {
-        "users": page_obj, # Template iterates over this
-        "page_obj": page_obj, # For pagination controls
-        "current_filter": filter_type,
-        "title": title
-    }
-    return render(request, "custom_admin.html", context)
-
-@admin_required
-@require_POST
-def admin_add_user(request):
-    username = request.POST.get('username')
-    email = request.POST.get('email')
-    password = request.POST.get('password')
-    confirm_password = request.POST.get('confirm_password')
-
-    # Basic validations
-    if not (username and email and password and confirm_password):
-        messages.error(request, "กรุณากรอกข้อมูลให้ครบถ้วน")
-        return redirect('custom_admin')
-
-    if password != confirm_password:
-        messages.error(request, "รหัสผ่านไม่ตรงกัน")
-        return redirect('custom_admin')
-
-    if User.objects.filter(username=username).exists():
-        messages.error(request, "Username นี้มีผู้ใช้งานแล้ว")
-        return redirect('custom_admin')
-
-    if User.objects.filter(email=email).exists():
-        messages.error(request, "Email นี้มีผู้ใช้งานแล้ว")
-        return redirect('custom_admin')
-    
-    # Password complexity check (simple)
-    if len(password) < 8 or not any(char.isdigit() for char in password):
-        messages.error(request, "รหัสผ่านต้องมีความยาวอย่างน้อย 8 ตัวอักษรและมีตัวเลขผสม")
-        return redirect('custom_admin')
-
-    try:
-        user = User.objects.create_user(username=username, email=email, password=password)
-        # Profile is created via signals
-        messages.success(request, f"สร้างสมาชิกใหม่ {username} สำเร็จแล้ว")
-    except Exception as e:
-        messages.error(request, f"เกิดข้อผิดพลาด: {e}")
-
-    return redirect('custom_admin')
-
-@admin_required
-def admin_toggle_user_active(request, user_id):
-    user = get_object_or_404(User, pk=user_id)
-
-    # กันไม่ให้ปิดการใช้งานตัวเอง
-    if request.user == user:
-        messages.error(request, "ไม่สามารถปิดการใช้งานบัญชีของตัวเองได้")
-        return redirect("custom_admin")
-
-    user.is_active = not user.is_active
-    user.save()
-    messages.success(request, f"อัปเดตสถานะการใช้งานของ {user.username} แล้ว")
-    return redirect("custom_admin")
-
-@admin_required
-def admin_toggle_user_staff(request, user_id):
-    user = get_object_or_404(User, pk=user_id)
-
-    # กันไม่ให้เปลี่ยนสิทธิ์ตัวเอง
-    if request.user == user:
-        messages.error(request, "ไม่สามารถเปลี่ยนสิทธิ์ของตัวเองได้")
-        return redirect("custom_admin")
-
-    user.is_staff = not user.is_staff
-    user.save()
-
-    if user.is_staff:
-        msg = f"ให้สิทธิ์แอดมินกับ {user.username} แล้ว"
-    else:
-        msg = f"ถอนสิทธิ์แอดมินของ {user.username} แล้ว"
-    messages.success(request, msg)
-    return redirect("custom_admin")
-
-@admin_required
-def admin_delete_user(request, user_id):
-    user = get_object_or_404(User, pk=user_id)
-
-    # กันไม่ให้ลบตัวเอง
-    if request.user == user:
-        messages.error(request, "ไม่สามารถลบบัญชีของตัวเองได้")
-        return redirect("custom_admin")
-
-    username = user.username
-    user.delete()
-    messages.success(request, f"ลบบัญชีผู้ใช้ {username} เรียบร้อยแล้ว")
-    return redirect("custom_admin")
-
-def staff_required(view_func):
-    return user_passes_test(lambda u: u.is_authenticated and u.is_staff)(view_func)
-
-# ==========================================
-# 3.3 จัดการ Model (Model Management)
-# ==========================================
-
-@staff_required
-def custom_model(request):
-    models_qs = GenerateModel.objects.all().order_by("id")
-    paginator = Paginator(models_qs, 5)
-    page_number = request.GET.get('page')
-    page_obj = paginator.get_page(page_number)
-    
-    return render(request, "custom_model.html", {
-        "models_data": page_obj,
-        "page_obj": page_obj,
-    })
-
-@staff_required
-def add_model(request):
-    if request.method == "POST":
-        name = request.POST.get("name")
-        value = request.POST.get("value")
-        is_active = request.POST.get("is_active") == "true"
-
-        if not name or not value:
-            messages.error(request, "กรุณากรอกทั้ง Name และ Value")
-            return redirect("custom_model")
-
-        GenerateModel.objects.create(
-            name=name,
-            value=value,
-            is_active=is_active
-        )
-        return redirect("custom_model")
-
-def edit_model(request, pk):
-    model = get_object_or_404(GenerateModel, pk=pk)
-    if request.method == "POST":
-        model.name = request.POST.get("name")
-        model.value = request.POST.get("value")
-        model.is_active = request.POST.get("is_active") == "true"
-        model.save()
-        messages.success(request, f"แก้ไข Model '{model.name}' สำเร็จแล้ว")
-    return redirect("custom_model")
-
-@staff_required
-def delete_model(request, pk):
-    model = get_object_or_404(GenerateModel, pk=pk)
-    model_name = model.name
-    model.delete()
-    messages.success(request, f"ลบโมเดล '{model_name}' สำเร็จแล้ว")
-    return redirect("custom_model")
-
-def toggle_status(request, pk):
-    model = GenerateModel.objects.get(pk=pk)
-    model.is_active = not model.is_active
-    model.save()
-    return redirect("custom_model")
-
-def _get_presets():
-    # Helper for getting presets (possibly deprecated if not used)
-    setting = GenerateSetting.objects.first()
-    if not setting:
-        return {
-            "models_available": [{"label": "Nova XL v9.0", "value": "novaOrangeXL_v90.safetensors"}],
-            "dimensions": ["2:3", "1:1", "16:9"],
-            "sizes": ["Small", "Medium", "Large"],
-            "numbers": ["1", "2", "3", "4"],
-            "defaults": {"model":"novaOrangeXL_v90.safetensors","dim":"2:3","size":"Small","count":"1"},
-            "size_px_map": {"Small":512,"Medium":768,"Large":1024},
-        }
-    return {
-        "models_available": [m.strip() for m in setting.models_available.split(",")],
-        "dimensions": [d.strip() for d in setting.dimensions.split(",")],
-        "sizes": [s.strip() for s in setting.sizes.split(",")],
-        "numbers": [n.strip() for n in setting.number_of_images.split(",")],
-        "defaults": {"model": setting.name, "dim": "2:3", "size": "Small", "count": "1"},
-        "size_px_map": {"Small":512,"Medium":768,"Large":1024}
-    }
-
-# ==========================================
-# 3.4 จัดการ Dimension (Dimension Management)
-# ==========================================
-
-def custom_dimension(request):
-    dimensions_qs = GenerateDimension.objects.all().order_by("id")
-    paginator = Paginator(dimensions_qs, 5)
-    page_number = request.GET.get('page')
-    page_obj = paginator.get_page(page_number)
-    context = {
-        "dimensions": page_obj,
-        "page_obj": page_obj,
-    }
-    return render(request, "custom_dimension.html", context)
-
-def add_dimension(request):
-    if request.method == "POST":
-        label = request.POST.get("label")
-        value = request.POST.get("value")
-        is_active = request.POST.get("is_active") == "true"
-
-        if not label or not value:
-            messages.error(request, "กรุณากรอก Label และ Value ให้ครบ")
-            return redirect("custom_dimension")
-
-        GenerateDimension.objects.create(label=label, value=value, is_active=is_active)
-        messages.success(request, f"เพิ่ม Dimension '{label}' ({value}) สำเร็จแล้ว")
-    return redirect("custom_dimension")
-
-def edit_dimension(request, pk):
-    dim = get_object_or_404(GenerateDimension, pk=pk)
-    if request.method == "POST":
-        dim.label = request.POST.get("label")
-        dim.value = request.POST.get("value")
-        dim.is_active = request.POST.get("is_active") == "true"
-        dim.save()
-        messages.success(request, f"แก้ไข Dimension '{dim.label}' สำเร็จแล้ว")
-        return redirect("custom_dimension")
-    return render(request, "edit_dimension.html", {"dimension": dim})
-
-def delete_dimension(request, pk):
-    dim = get_object_or_404(GenerateDimension, pk=pk)
-    dim.delete()
-    messages.success(request, f"ลบ Dimension '{dim.label}' สำเร็จแล้ว")
-    return redirect("custom_dimension")
-
-def toggle_dimension(request, pk):
-    dim = get_object_or_404(GenerateDimension, pk=pk)
-    dim.is_active = not dim.is_active
-    dim.save()
-    state = "Active" if dim.is_active else "Suspended"
-    messages.success(request, f"Dimension '{dim.label}' ถูกเปลี่ยนเป็น {state}")
-    return redirect("custom_dimension")
-
-# ==========================================
-# 3.5 จัดการ Count (Count Management)
-# ==========================================
-
-def custom_count(request):
-    counts_qs = GenerateCount.objects.all().order_by("id")
-    paginator = Paginator(counts_qs, 5)
-    page_number = request.GET.get('page')
-    page_obj = paginator.get_page(page_number)
-    context = {
-        "counts": page_obj,
-        "page_obj": page_obj,
-    }
-    return render(request, "custom_count.html", context)
-
-def add_count(request):
-    if request.method == "POST":
-        value = request.POST.get("value")
-        is_active = request.POST.get("is_active") == "true"
-
-        if not value:
-            messages.error(request, "กรุณากรอก Value")
-            return redirect("custom_count")
-        GenerateCount.objects.create(value=value, is_active=is_active)
-        messages.success(request, f"เพิ่ม Count '{value}' สำเร็จแล้ว")
-    return redirect("custom_count")
-
-def edit_count(request, pk):
-    count = get_object_or_404(GenerateCount, pk=pk)
-    if request.method == "POST":
-        count.value = request.POST.get("value")
-        count.is_active = request.POST.get("is_active") == "true"
-        count.save()
-        messages.success(request, f"แก้ไข Count '{count.value}' สำเร็จแล้ว")
-    return redirect("custom_count")
-
-def delete_count(request, pk):
-    count = get_object_or_404(GenerateCount, pk=pk)
-    count.delete()
-    messages.success(request, f"ลบ Count '{count.value}' สำเร็จแล้ว")
-    return redirect("custom_count")
-
-def toggle_count(request, pk):
-    count = get_object_or_404(GenerateCount, pk=pk)
-    count.is_active = not count.is_active
-    count.save()
-    state = "Active" if count.is_active else "Suspended"
-    messages.success(request, f"Count '{count.value}' ถูกเปลี่ยนเป็น {state}")
-    return redirect("custom_count")
-
-
-
-@admin_required
-def admin_dashboard(request):
-    today = timezone.now().date()
-    
-    # สถิติจริงจาก User
-    total_users = User.objects.count()
-    active_users_today = User.objects.filter(last_login__date=today).count()
-    new_users_today = User.objects.filter(date_joined__date=today).count()
-    
-    # Models, Tags, Images Count (Real queries)
-    active_models = GenerateModel.objects.filter(is_active=True).count()
-    tags_count = Tag.objects.count()
-    
-    # Use real GenerateHistory count if available, else 0
-    total_generated_images = GenerateHistory.objects.count()
-    generated_today = GenerateHistory.objects.filter(created_at__date=today).count()
-
-    # สมาชิกใหม่ล่าสุด (5 คน)
-    recent_users = User.objects.order_by("-date_joined")[:5]
-    
-    # ภาพที่สร้างล่าสุด (5 ภาพ)
-    recent_images = GenerateHistory.objects.select_related('user').order_by('-created_at')[:5]
-    
-    # Model Usage (Top 5)
-    model_usage = GenerateModel.objects.annotate(count=Count('generatehistory')).order_by('-count')[:5]
-    
-    # Tag Usage (Top 5)
-    tag_usage = Tag.objects.annotate(count=Count('posts')).order_by('-count')[:5]
-
-    return render(request, "dashboard.html", {
-        "total_users": total_users,
-        "active_users_today": active_users_today,
-        "new_users_today": new_users_today,
-        "recent_users": recent_users,
-        "recent_images": recent_images,
-        "total_generated_images": total_generated_images,
-        "generated_today": generated_today,
-        "active_models": active_models,
-        "tags_count": tags_count,
-        "model_usage": model_usage,
-        "tag_usage": tag_usage,
-    })
-
-    # ตัวอย่างการใช้งานโมเดล (dummy)
-    model_usage = [
-        {"name": "sdxl", "percent": 50},
-        {"name": "anime-v1", "percent": 30},
-        {"name": "nova", "percent": 20},
-    ]
-
-    # ตัวอย่างการใช้งานแท็ก (dummy)
-    tag_usage = [
-        {"name": "cinematic lighting", "count": 42},
-        {"name": "soft light", "count": 35},
-        {"name": "portrait", "count": 28},
-        {"name": "wide shot", "count": 19},
-    ]
-
-    context = {
-        "total_users": total_users,
-        "active_users_today": active_users_today,
-        "new_users_today": new_users_today,
-        "total_generated_images": total_generated_images,
-        "generated_today": generated_today,
-        "active_models": active_models,
-        "tags_count": tags_count,
-        "recent_users": recent_users,
-        "recent_images": recent_images,
-        "model_usage": model_usage,
-        "tag_usage": tag_usage,
-    }
-    return render(request, "dashboard.html", context)
-
-@admin_required
-def custom_admin(request):
-
-    
-    filter_type = request.GET.get('filter')
-    today = timezone.now().date()
-
-    # หน้าแดชบอร์ดแอดมิน + รายชื่อสมาชิก
-    title = "จัดการสมาชิก (Members)"
-    if filter_type == 'active_today':
-        users_qs = User.objects.filter(last_login__date=today).order_by('-last_login')
-        title = f"จัดการสมาชิก (Active Today: {today})"
-    elif filter_type == 'new_today':
-        users_qs = User.objects.filter(date_joined__date=today).order_by('-date_joined')
-        title = f"จัดการสมาชิก (New Today: {today})"
-    else:
-        users_qs = User.objects.all().order_by("-date_joined")
-    
-    paginator = Paginator(users_qs, 5) # Show 5 users per page
-    page_number = request.GET.get('page')
-    page_obj = paginator.get_page(page_number)
-        
-    context = {
-        "users": page_obj, # Template iterates over this
-        "page_obj": page_obj, # For pagination controls
-        "current_filter": filter_type,
-        "title": title
-    }
-    return render(request, "custom_admin.html", context)
-
-
-@admin_required
-def admin_toggle_user_active(request, user_id):
-    user = get_object_or_404(User, pk=user_id)
-
-    # กันไม่ให้ปิดการใช้งานตัวเอง
-    if request.user == user:
-        messages.error(request, "ไม่สามารถปิดการใช้งานบัญชีของตัวเองได้")
-        return redirect("custom_admin")
-
-    user.is_active = not user.is_active
-    user.save()
-    messages.success(request, f"อัปเดตสถานะการใช้งานของ {user.username} แล้ว")
-    return redirect("custom_admin")
-
-
-@admin_required
-def admin_toggle_user_staff(request, user_id):
-    user = get_object_or_404(User, pk=user_id)
-
-    # กันไม่ให้เปลี่ยนสิทธิ์ตัวเอง
-    if request.user == user:
-        messages.error(request, "ไม่สามารถเปลี่ยนสิทธิ์ของตัวเองได้")
-        return redirect("custom_admin")
-
-    user.is_staff = not user.is_staff
-    user.save()
-
-    if user.is_staff:
-        msg = f"ให้สิทธิ์แอดมินกับ {user.username} แล้ว"
-    else:
-        msg = f"ถอนสิทธิ์แอดมินของ {user.username} แล้ว"
-    messages.success(request, msg)
-    return redirect("custom_admin")
-
-
-@admin_required
-def admin_delete_user(request, user_id):
-    user = get_object_or_404(User, pk=user_id)
-
-    # กันไม่ให้ลบตัวเอง
-    if request.user == user:
-        messages.error(request, "ไม่สามารถลบบัญชีของตัวเองได้")
-        return redirect("custom_admin")
-
-    username = user.username
-    user.delete()
-    messages.success(request, f"ลบบัญชีผู้ใช้ {username} เรียบร้อยแล้ว")
-    return redirect("custom_admin")
-
-
-def staff_required(view_func):
-    return user_passes_test(lambda u: u.is_authenticated and u.is_staff)(view_func)
-
-@staff_required
-def custom_model(request):
-
-    models_qs = GenerateModel.objects.all().order_by("id")
-    
-    paginator = Paginator(models_qs, 5)
-    page_number = request.GET.get('page')
-    page_obj = paginator.get_page(page_number)
-    
-    return render(request, "custom_model.html", {
-        "models_data": page_obj,
-        "page_obj": page_obj,
-    })
-
-@staff_required
-def delete_model(request, pk):
-    model = get_object_or_404(GenerateModel, pk=pk)  # ใช้ GenerateModel
-    model_name = model.name                         # เก็บชื่อไว้ก่อนลบ
-    model.delete()
-
-    # ใช้ message framework เพื่อแสดงชื่อที่ถูกลบ
-
-    messages.success(request, f"ลบโมเดล '{model_name}' สำเร็จแล้ว")
-
-    return redirect("custom_model")
-
-
-@staff_required
-def add_model(request):
-    if request.method == "POST":
-        name = request.POST.get("name")
-        models_available = request.POST.get("models_available")
-        dimensions = request.POST.get("dimensions")
-        sizes = request.POST.get("sizes")
-        number_of_images = request.POST.get("number_of_images")
-
-        GenerateSetting.objects.create(
-            name=name,
-            models_available=models_available,
-            dimensions=dimensions,
-            sizes=sizes,
-            number_of_images=number_of_images,
-        )
-        return redirect("custom_model")
-
-    return redirect("custom_model")
-
-def edit_model(request, pk):
-    model = get_object_or_404(GenerateModel, pk=pk)
-    if request.method == "POST":
-        model.name = request.POST.get("name")
-        model.value = request.POST.get("value")
-        model.is_active = request.POST.get("is_active") == "true"
-        model.save()
-        messages.success(request, f"แก้ไข Model '{model.name}' สำเร็จแล้ว")
-    return redirect("custom_model")
-
-
-def toggle_status(request, pk):
-    model = GenerateModel.objects.get(pk=pk)
-    model.is_active = not model.is_active   # ใช้ฟิลด์ is_active แทน status
-    model.save()
-    return redirect("custom_model")
-
-@staff_required
-def add_model(request):
-    if request.method == "POST":
-        name = request.POST.get("name")
-        value = request.POST.get("value")
-        is_active = request.POST.get("is_active") == "true"
-
-        if not name or not value:
-            messages.error(request, "กรุณากรอกทั้ง Name และ Value")
-            return redirect("custom_model")
-
-        GenerateModel.objects.create(
-            name=name,
-            value=value,
-            is_active=is_active
-        )
-        return redirect("custom_model")
-
-
-
-
-# helper
-def _get_presets():
-    setting = GenerateSetting.objects.first()
-    if not setting:
-        return {
-            "models_available": [{"label": "Nova XL v9.0", "value": "novaOrangeXL_v90.safetensors"}],
-            "dimensions": ["2:3", "1:1", "16:9"],
-            "sizes": ["Small", "Medium", "Large"],
-            "numbers": ["1", "2", "3", "4"],
-            "defaults": {"model":"novaOrangeXL_v90.safetensors","dim":"2:3","size":"Small","count":"1"},
-            "size_px_map": {"Small":512,"Medium":768,"Large":1024},
-        }
-    return {
-        "models_available": [m.strip() for m in setting.models_available.split(",")],
-        "dimensions": [d.strip() for d in setting.dimensions.split(",")],
-        "sizes": [s.strip() for s in setting.sizes.split(",")],
-        "numbers": [n.strip() for n in setting.number_of_images.split(",")],
-        "defaults": {"model": setting.name, "dim": "2:3", "size": "Small", "count": "1"},
-        "size_px_map": {"Small":512,"Medium":768,"Large":1024}
-    }
-
-
-
-
-
-def custom_dimension(request):
-
-    dimensions_qs = GenerateDimension.objects.all().order_by("id")
-    
-    paginator = Paginator(dimensions_qs, 5)
-    page_number = request.GET.get('page')
-    page_obj = paginator.get_page(page_number)
-        
-    context = {
-        "dimensions": page_obj,
-        "page_obj": page_obj,
-    }
-    return render(request, "custom_dimension.html", context)
-
-
-def add_dimension(request):
-    if request.method == "POST":
-        label = request.POST.get("label")
-        value = request.POST.get("value")
-        is_active = request.POST.get("is_active") == "true"
-
-        if not label or not value:
-            messages.error(request, "กรุณากรอก Label และ Value ให้ครบ")
-            return redirect("custom_dimension")
-
-        GenerateDimension.objects.create(label=label, value=value, is_active=is_active)
-        messages.success(request, f"เพิ่ม Dimension '{label}' ({value}) สำเร็จแล้ว")
-    return redirect("custom_dimension")
-
-
-def edit_dimension(request, pk):
-    dim = get_object_or_404(GenerateDimension, pk=pk)
-    if request.method == "POST":
-        dim.label = request.POST.get("label")
-        dim.value = request.POST.get("value")
-        dim.is_active = request.POST.get("is_active") == "true"
-        dim.save()
-        messages.success(request, f"แก้ไข Dimension '{dim.label}' สำเร็จแล้ว")
-        return redirect("custom_dimension")
-    return render(request, "edit_dimension.html", {"dimension": dim})
-
-
-def delete_dimension(request, pk):
-    dim = get_object_or_404(GenerateDimension, pk=pk)
-    dim.delete()
-    messages.success(request, f"ลบ Dimension '{dim.label}' สำเร็จแล้ว")
-    return redirect("custom_dimension")
-
-
-def toggle_dimension(request, pk):
-    dim = get_object_or_404(GenerateDimension, pk=pk)
-    dim.is_active = not dim.is_active
-    dim.save()
-    state = "Active" if dim.is_active else "Suspended"
-    messages.success(request, f"Dimension '{dim.label}' ถูกเปลี่ยนเป็น {state}")
-    return redirect("custom_dimension")
-
-
-def custom_count(request):
-
-    counts_qs = GenerateCount.objects.all().order_by("id")
-    
-    paginator = Paginator(counts_qs, 5)
-    page_number = request.GET.get('page')
-    page_obj = paginator.get_page(page_number)
-    
-    context = {
-        "counts": page_obj,
-        "page_obj": page_obj,
-    }
-    return render(request, "custom_count.html", context)
-
-def add_count(request):
-    if request.method == "POST":
-        value = request.POST.get("value")
-        is_active = request.POST.get("is_active") == "true"
-
-        if not value:
-            messages.error(request, "กรุณากรอก Value")
-            return redirect("custom_count")
-        GenerateCount.objects.create(value=value, is_active=is_active)
-        messages.success(request, f"เพิ่ม Count '{value}' สำเร็จแล้ว")
-    return redirect("custom_count")
-
-def edit_count(request, pk):
-    count = get_object_or_404(GenerateCount, pk=pk)
-    if request.method == "POST":
-        count.value = request.POST.get("value")
-        count.is_active = request.POST.get("is_active") == "true"
-        count.save()
-        messages.success(request, f"แก้ไข Count '{count.value}' สำเร็จแล้ว")
-    return redirect("custom_count")
-
-def delete_count(request, pk):
-    count = get_object_or_404(GenerateCount, pk=pk)
-    count.delete()
-    messages.success(request, f"ลบ Count '{count.value}' สำเร็จแล้ว")
-    return redirect("custom_count")
-
-def toggle_count(request, pk):
-    count = get_object_or_404(GenerateCount, pk=pk)
-    count.is_active = not count.is_active
-    count.save()
-    state = "Active" if count.is_active else "Suspended"
-    messages.success(request, f"Count '{count.value}' ถูกเปลี่ยนเป็น {state}")
-    return redirect("custom_count")
-    messages.success(request, f"ลบบัญชีผู้ใช้ {username} เรียบร้อยแล้ว")
-    return redirect("custom_admin")
-
-
-def staff_required(view_func):
-    return user_passes_test(lambda u: u.is_authenticated and u.is_staff)(view_func)
-
-@staff_required
-def custom_model(request):
-
-    models_qs = GenerateModel.objects.all().order_by("id")
-    
-    paginator = Paginator(models_qs, 5)
-    page_number = request.GET.get('page')
-    page_obj = paginator.get_page(page_number)
-    
-    return render(request, "custom_model.html", {
-        "models_data": page_obj,
-        "page_obj": page_obj,
-    })
-
-@staff_required
-def delete_model(request, pk):
-    model = get_object_or_404(GenerateModel, pk=pk)  # ใช้ GenerateModel
-    model_name = model.name                         # เก็บชื่อไว้ก่อนลบ
-    model.delete()
-
-    # ใช้ message framework เพื่อแสดงชื่อที่ถูกลบ
-
-    messages.success(request, f"ลบโมเดล '{model_name}' สำเร็จแล้ว")
-
-    return redirect("custom_model")
-
-
-@staff_required
-def add_model(request):
-    if request.method == "POST":
-        name = request.POST.get("name")
-        models_available = request.POST.get("models_available")
-        dimensions = request.POST.get("dimensions")
-        sizes = request.POST.get("sizes")
-        number_of_images = request.POST.get("number_of_images")
-
-        GenerateSetting.objects.create(
-            name=name,
-            models_available=models_available,
-            dimensions=dimensions,
-            sizes=sizes,
-            number_of_images=number_of_images,
-        )
-        return redirect("custom_model")
-
-    return redirect("custom_model")
-
-def edit_model(request, pk):
-    model = get_object_or_404(GenerateModel, pk=pk)
-    if request.method == "POST":
-        model.name = request.POST.get("name")
-        model.value = request.POST.get("value")
-        model.is_active = request.POST.get("is_active") == "true"
-        model.save()
-        messages.success(request, f"แก้ไข Model '{model.name}' สำเร็จแล้ว")
-    return redirect("custom_model")
-
-
-def toggle_status(request, pk):
-    model = GenerateModel.objects.get(pk=pk)
-    model.is_active = not model.is_active   # ใช้ฟิลด์ is_active แทน status
-    model.save()
-    return redirect("custom_model")
-
-@staff_required
-def add_model(request):
-    if request.method == "POST":
-        name = request.POST.get("name")
-        value = request.POST.get("value")
-        is_active = request.POST.get("is_active") == "true"
-
-        if not name or not value:
-            messages.error(request, "กรุณากรอกทั้ง Name และ Value")
-            return redirect("custom_model")
-
-        GenerateModel.objects.create(
-            name=name,
-            value=value,
-            is_active=is_active
-        )
-        return redirect("custom_model")
-
-
-
-
-# helper
-def _get_presets():
-    setting = GenerateSetting.objects.first()
-    if not setting:
-        return {
-            "models_available": [{"label": "Nova XL v9.0", "value": "novaOrangeXL_v90.safetensors"}],
-            "dimensions": ["2:3", "1:1", "16:9"],
-            "sizes": ["Small", "Medium", "Large"],
-            "numbers": ["1", "2", "3", "4"],
-            "defaults": {"model":"novaOrangeXL_v90.safetensors","dim":"2:3","size":"Small","count":"1"},
-            "size_px_map": {"Small":512,"Medium":768,"Large":1024},
-        }
-    return {
-        "models_available": [m.strip() for m in setting.models_available.split(",")],
-        "dimensions": [d.strip() for d in setting.dimensions.split(",")],
-        "sizes": [s.strip() for s in setting.sizes.split(",")],
-        "numbers": [n.strip() for n in setting.number_of_images.split(",")],
-        "defaults": {"model": setting.name, "dim": "2:3", "size": "Small", "count": "1"},
-        "size_px_map": {"Small":512,"Medium":768,"Large":1024}
-    }
-
-
-
-
-
-def custom_dimension(request):
-
-    dimensions_qs = GenerateDimension.objects.all().order_by("id")
-    
-    paginator = Paginator(dimensions_qs, 5)
-    page_number = request.GET.get('page')
-    page_obj = paginator.get_page(page_number)
-        
-    context = {
-        "dimensions": page_obj,
-        "page_obj": page_obj,
-    }
-    return render(request, "custom_dimension.html", context)
-
-
-def add_dimension(request):
-    if request.method == "POST":
-        label = request.POST.get("label")
-        value = request.POST.get("value")
-        is_active = request.POST.get("is_active") == "true"
-
-        if not label or not value:
-            messages.error(request, "กรุณากรอก Label และ Value ให้ครบ")
-            return redirect("custom_dimension")
-
-        GenerateDimension.objects.create(label=label, value=value, is_active=is_active)
-        messages.success(request, f"เพิ่ม Dimension '{label}' ({value}) สำเร็จแล้ว")
-    return redirect("custom_dimension")
-
-
-def edit_dimension(request, pk):
-    dim = get_object_or_404(GenerateDimension, pk=pk)
-    if request.method == "POST":
-        dim.label = request.POST.get("label")
-        dim.value = request.POST.get("value")
-        dim.is_active = request.POST.get("is_active") == "true"
-        dim.save()
-        messages.success(request, f"แก้ไข Dimension '{dim.label}' สำเร็จแล้ว")
-        return redirect("custom_dimension")
-    return render(request, "edit_dimension.html", {"dimension": dim})
-
-
-def delete_dimension(request, pk):
-    dim = get_object_or_404(GenerateDimension, pk=pk)
-    dim.delete()
-    messages.success(request, f"ลบ Dimension '{dim.label}' สำเร็จแล้ว")
-    return redirect("custom_dimension")
-
-
-def toggle_dimension(request, pk):
-    dim = get_object_or_404(GenerateDimension, pk=pk)
-    dim.is_active = not dim.is_active
-    dim.save()
-    state = "Active" if dim.is_active else "Suspended"
-    messages.success(request, f"Dimension '{dim.label}' ถูกเปลี่ยนเป็น {state}")
-    return redirect("custom_dimension")
-
-
-def custom_count(request):
-
-    counts_qs = GenerateCount.objects.all().order_by("id")
-    
-    paginator = Paginator(counts_qs, 5)
-    page_number = request.GET.get('page')
-    page_obj = paginator.get_page(page_number)
-    
-    context = {
-        "counts": page_obj,
-        "page_obj": page_obj,
-    }
-    return render(request, "custom_count.html", context)
-
-def add_count(request):
-    if request.method == "POST":
-        value = request.POST.get("value")
-        is_active = request.POST.get("is_active") == "true"
-
-        if not value:
-            messages.error(request, "กรุณากรอก Value")
-            return redirect("custom_count")
-
-        GenerateCount.objects.create(value=value, is_active=is_active)
-        messages.success(request, f"เพิ่ม Count '{value}' สำเร็จแล้ว")
-    return redirect("custom_count")
-
-def edit_count(request, pk):
-    count = get_object_or_404(GenerateCount, pk=pk)
-    if request.method == "POST":
-        count.value = request.POST.get("value")
-        count.is_active = request.POST.get("is_active") == "true"
-        count.save()
-        messages.success(request, f"แก้ไข Count '{count.value}' สำเร็จแล้ว")
-    return redirect("custom_count")
-
-def delete_count(request, pk):
-    count = get_object_or_404(GenerateCount, pk=pk)
-    count.delete()
-    messages.success(request, f"ลบ Count '{count.value}' สำเร็จแล้ว")
-    return redirect("custom_count")
-
-def toggle_count(request, pk):
-    count = get_object_or_404(GenerateCount, pk=pk)
-    count.is_active = not count.is_active
-    count.save()
-    state = "Active" if count.is_active else "Suspended"
-    messages.success(request, f"Count '{count.value}' ถูกเปลี่ยนเป็น {state}")
-    return redirect("custom_count")
-
-
-
-def _extract_json_from_text(text):
-
-    json_str = ""
-    # 1. Try markdown code block (json optional)
-    match = re.search(r'```(?:json)?\s*(\{.*?\})\s*```', text, re.DOTALL)
-    if match:
-        json_str = match.group(1)
-    else:
-        # 2. Fallback: Find the *last* valid outer JSON block
-        matches = re.findall(r'(\{.*?\})', text, re.DOTALL)
-        if matches:
-            # Prefer the last one as it's likely the final answer
-            candidate = matches[-1]
-            if '"subject"' in candidate:
-                json_str = candidate
-            else:
-                # If last one is small, maybe it's the 1st one? Fallback range
-                start_idx = text.find('{')
-                end_idx = text.rfind('}') + 1
-                if start_idx != -1 and end_idx != -1:
-                    json_str = text[start_idx:end_idx]
-        else:
-             # Last resort
-             start_idx = text.find('{')
-             end_idx = text.rfind('}') + 1
-             if start_idx != -1 and end_idx != -1:
-                json_str = text[start_idx:end_idx]
-    return json_str
-
-def call_agent_assist(topic, style="", intended_subject=""):
-    try:
-        template = f"""
-You are a creative AI assistant for image generation prompts.
-
-User's Input: "{topic}"
-User's Intended StyleTASK:
-1. Analyze the "User's Input" (which can be in Thai or English).
-2. Generate creative suggestions for each category to help build a detailed image prompt.
-3. **OUTPUT MUST BE A VALID JSON OBJECT.**
-4. **LANGUAGE RULE: Suggestions must match the language of the User's Input.** 
-   - If Input is English -> Suggestions must be in English.
-   - If Input is Thai -> Suggestions must be in Thai.
-
-CRITICAL RULES:
-- Keys must be English (e.g., "subject", "suggestions").
-- Strings must use DOUBLE QUOTES (").
-- **EXTRACTION RULE**: The "current" value must be COPIED EXACTLY from the Input. DO NOT TRANSLATE IT.
-  - If Input says "Cat", "current" must be "Cat" (NOT "แมว").
-  - If Input says "แมว", "current" must be "แมว".
-- No extra text.
-
-*** EXAMPLES ***
-
-Example 1 (English Input -> English Output):
-Input: "Cat"
-Output:
-{{
-  "subject": {{ "current": "Cat", "suggestions": ["Cute cat", "Orange tabby", "Kitten", "Persian cat"] }},
-  "action_pose": {{ "current": "", "suggestions": ["Sleeping", "Jumping", "Sitting by window", "Walking in garden"] }},
-  "attributes": {{ "current": "", "suggestions": ["Fluffy fur", "Blue eyes", "Wearing collar", "Long tail"] }},
-  "environment_setting": {{ "current": "", "suggestions": ["On a sofa", "In a living room", "On the roof", "In a cardboard box"] }},
-  "composition_framing": {{ "current": "", "suggestions": ["Close-up shot", "Low angle", "Bokeh background", "Natural light"] }},
-  "style": {{ "current": "", "suggestions": ["Photorealistic", "Watercolor painting", "Cartoon style", "3D Render"] }},
-  "lighting": {{ "current": "", "suggestions": ["Morning sunlight", "Soft light", "Studio lighting", "Dark shadows"] }},
-  "camera": {{ "current": "", "suggestions": ["Macro lens", "Wide angle", "Eye level", "High angle"] }},
-  "mood": {{ "current": "", "suggestions": ["Cute and cheerful", "Warm", "Peaceful", "Playful"] }},
-  "negative_prompt": {{ "current": "", "suggestions": ["Blurry image", "Cat with 5 legs", "Too dark", "Watermark"] }}
-}}
-
-Example 2 (Thai Input -> Thai Output):
-Input: "หญิงสาว"
-Output:
-{{
-  "subject": {{ "current": "หญิงสาว", "suggestions": ["สาวสวย", "ผู้หญิงวัยรุ่น", "นางแบบ", "สาวผมยาว"] }},
-  "action_pose": {{ "current": "", "suggestions": ["ยืนยิ้ม", "เดินเล่น", "นั่งอ่านหนังสือ", "ถือดอกไม้"] }},
-  "attributes": {{ "current": "", "suggestions": ["ผมสีทอง", "ตาสีฟ้า", "ใส่ชุดเดรส", "ผิวขาว"] }},
-  "environment_setting": {{ "current": "", "suggestions": ["ในสวนดอกไม้", "ริมทะเล", "ในคาเฟ่", "บนถนนในเมือง"] }},
-  "composition_framing": {{ "current": "", "suggestions": ["ภาพครึ่งตัว", "ภาพเต็มตัว", "หน้าชัดหลังเบลอ", "มุมสูง"] }},
-  "style": {{ "current": "", "suggestions": ["ภาพถ่ายสมจริง", "ภาพวาดสีน้ำมัน", "สไตล์อนิเมะ", "ภาพแนวแฟนตาซี"] }},
-  "lighting": {{ "current": "", "suggestions": ["แสงแดดยามเช้า", "แสงนวลตา", "แสงไฟสตูดิโอ", "เงามืด"] }},
-  "camera": {{ "current": "", "suggestions": ["เลนส์มาโคร", "มุมกว้าง", "ระดับสายตา", "มุมสูง"] }},
-  "mood": {{ "current": "", "suggestions": ["น่ารักสดใส", "อบอุ่น", "สงบ", "ขี้เล่น"] }},
-  "negative_prompt": {{ "current": "", "suggestions": ["ภาพเบลอ", "แมวมี 5 ขา", "ภาพมืดเกินไป", "ลายน้ำ"] }}
-}}
-
-Output the JSON result for the following Input:
-Input: "{topic}" (Style: "{style}", Subject: "{intended_subject}")
-"""
-        result = subprocess.run(
-            ["ollama", "run", "llama3.1", template],
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            timeout=300
-        )
-
-        output = result.stdout.strip()
-        print("[Agent Assist raw output]:\n", output)
-        
-        json_str = _extract_json_from_text(output)
-
-        # --- Self-Correction / Verification Loop ---
-        if json_str:
-            print("[Agent Assist]: verifying prompt...")
-            verify_template = f"""
-You are a Quality Assurance AI.
-User Input: "{topic}"
-Context: Style="{style}", Subject="{intended_subject}"
-
-Generated JSON:
-{json_str}
-
-Check if the Generated JSON accurately reflects the User Input.
-1. If it is GOOD and accurate, respond ONLY with the word: "USE"
-2. If it is BAD or inaccurate, generate a NEW, CORRECTED JSON object.
-"""
-            try:
-                verify_res = subprocess.run(
-                    ["ollama", "run", "llama3.1", verify_template],
-                    capture_output=True, text=True, encoding="utf-8", timeout=300
-                )
-                verify_out = verify_res.stdout.strip()
-                print("[Agent Verification Output]:\n", verify_out)
-                
-                # If response contains a JSON-like block, assume it's a correction
-                if "{" in verify_out and "}" in verify_out:
-                     corrected_json = _extract_json_from_text(verify_out)
-                     if corrected_json:
-                         print("[Agent Assist]: Using corrected JSON from verification.")
-                         json_str = corrected_json
-                elif "USE" in verify_out.upper():
-                     print("[Agent Assist]: Prompt approved by verification.")
-                else:
-                     print("[Agent Assist]: Verification output ambiguous, keeping original.")
-            except Exception as ve:
-                print(f"[Agent Assist]: Verification failed: {ve}")
-        # -------------------------------------------
-        
-        if json_str:
-            try:
-                data = json.loads(json_str)
-                return data
-            except json.JSONDecodeError as e:
-                print(f"JSON Parse Error: {e}")
-                # Log the extraction for debugging
-                print(f"Extracted String: {json_str[:100]}...{json_str[-100:]}")
-                return None
-        else:
-             print("No JSON structure found in output.")
-             return None
-
-    except Exception as e:
-        print("Agent Assist Error:", e)
-        return None
-
-@login_required(login_url='login')
-@require_POST
-def call_agent_assist_view(request):
-    topic = request.POST.get("topic", "").strip()
-    style = request.POST.get("style", "").strip()
-    intended_subject = request.POST.get("intended_subject", "").strip()
-    
-    data = call_agent_assist(topic, style, intended_subject)
-    
-    if data:
-        return JsonResponse({
-            "status": "success",
-            "data": data
-        })
-    else:
-        return JsonResponse({
-            "status": "error",
-            "message": "AI could not generate suggestions."
-        })
-
-def staff_required(view_func):
-    return user_passes_test(lambda u: u.is_authenticated and u.is_staff)(view_func)
-
-@staff_required
-def custom_model(request):
-
-    models_qs = GenerateModel.objects.all().order_by("id")
-    
-    paginator = Paginator(models_qs, 5)
-    page_number = request.GET.get('page')
-    page_obj = paginator.get_page(page_number)
-    
-    return render(request, "custom_model.html", {
-        "models_data": page_obj,
-        "page_obj": page_obj,
-    })
-
-@staff_required
-def delete_model(request, pk):
-    model = get_object_or_404(GenerateModel, pk=pk)  # ใช้ GenerateModel
-    model_name = model.name                         # เก็บชื่อไว้ก่อนลบ
-    model.delete()
-
-    # ใช้ message framework เพื่อแสดงชื่อที่ถูกลบ
-
-    messages.success(request, f"ลบโมเดล '{model_name}' สำเร็จแล้ว")
-
-    return redirect("custom_model")
-
-
-@staff_required
-def add_model(request):
-    if request.method == "POST":
-        name = request.POST.get("name")
-        models_available = request.POST.get("models_available")
-        dimensions = request.POST.get("dimensions")
-        sizes = request.POST.get("sizes")
-        number_of_images = request.POST.get("number_of_images")
-
-        GenerateSetting.objects.create(
-            name=name,
-            models_available=models_available,
-            dimensions=dimensions,
-            sizes=sizes,
-            number_of_images=number_of_images,
-        )
-        return redirect("custom_model")
-
-    return redirect("custom_model")
-
-def edit_model(request, pk):
-    model = get_object_or_404(GenerateModel, pk=pk)
-    if request.method == "POST":
-        model.name = request.POST.get("name")
-        model.value = request.POST.get("value")
-        model.is_active = request.POST.get("is_active") == "true"
-        model.save()
-        messages.success(request, f"แก้ไข Model '{model.name}' สำเร็จแล้ว")
-    return redirect("custom_model")
-
-
-def toggle_status(request, pk):
-    model = GenerateModel.objects.get(pk=pk)
-    model.is_active = not model.is_active   # ใช้ฟิลด์ is_active แทน status
-    model.save()
-    return redirect("custom_model")
-
-@staff_required
-def add_model(request):
-    if request.method == "POST":
-        name = request.POST.get("name")
-        value = request.POST.get("value")
-        is_active = request.POST.get("is_active") == "true"
-
-        if not name or not value:
-            messages.error(request, "กรุณากรอกทั้ง Name และ Value")
-            return redirect("custom_model")
-
-        GenerateModel.objects.create(
-            name=name,
-            value=value,
-            is_active=is_active
-        )
-        return redirect("custom_model")
-
-
-
-
-# helper
-def _get_presets():
-    setting = GenerateSetting.objects.first()
-    if not setting:
-        return {
-            "models_available": [{"label": "Nova XL v9.0", "value": "novaOrangeXL_v90.safetensors"}],
-            "dimensions": ["2:3", "1:1", "16:9"],
-            "sizes": ["Small", "Medium", "Large"],
-            "numbers": ["1", "2", "3", "4"],
-            "defaults": {"model":"novaOrangeXL_v90.safetensors","dim":"2:3","size":"Small","count":"1"},
-            "size_px_map": {"Small":512,"Medium":768,"Large":1024},
-        }
-    return {
-        "models_available": [m.strip() for m in setting.models_available.split(",")],
-        "dimensions": [d.strip() for d in setting.dimensions.split(",")],
-        "sizes": [s.strip() for s in setting.sizes.split(",")],
-        "numbers": [n.strip() for n in setting.number_of_images.split(",")],
-        "defaults": {"model": setting.name, "dim": "2:3", "size": "Small", "count": "1"},
-        "size_px_map": {"Small":512,"Medium":768,"Large":1024}
-    }
-
-
-
-
-
-def custom_dimension(request):
-
-    dimensions_qs = GenerateDimension.objects.all().order_by("id")
-    
-    paginator = Paginator(dimensions_qs, 5)
-    page_number = request.GET.get('page')
-    page_obj = paginator.get_page(page_number)
-        
-    context = {
-        "dimensions": page_obj,
-        "page_obj": page_obj,
-    }
-    return render(request, "custom_dimension.html", context)
-
-
-def add_dimension(request):
-    if request.method == "POST":
-        label = request.POST.get("label")
-        value = request.POST.get("value")
-        is_active = request.POST.get("is_active") == "true"
-
-        if not label or not value:
-            messages.error(request, "กรุณากรอก Label และ Value ให้ครบ")
-            return redirect("custom_dimension")
-
-        GenerateDimension.objects.create(label=label, value=value, is_active=is_active)
-        messages.success(request, f"เพิ่ม Dimension '{label}' ({value}) สำเร็จแล้ว")
-    return redirect("custom_dimension")
-
-
-def edit_dimension(request, pk):
-    dim = get_object_or_404(GenerateDimension, pk=pk)
-    if request.method == "POST":
-        dim.label = request.POST.get("label")
-        dim.value = request.POST.get("value")
-        dim.is_active = request.POST.get("is_active") == "true"
-        dim.save()
-        messages.success(request, f"แก้ไข Dimension '{dim.label}' สำเร็จแล้ว")
-        return redirect("custom_dimension")
-    return render(request, "edit_dimension.html", {"dimension": dim})
-
-
-def delete_dimension(request, pk):
-    dim = get_object_or_404(GenerateDimension, pk=pk)
-    dim.delete()
-    messages.success(request, f"ลบ Dimension '{dim.label}' สำเร็จแล้ว")
-    return redirect("custom_dimension")
-
-
-def toggle_dimension(request, pk):
-    dim = get_object_or_404(GenerateDimension, pk=pk)
-    dim.is_active = not dim.is_active
-    dim.save()
-    state = "Active" if dim.is_active else "Suspended"
-    messages.success(request, f"Dimension '{dim.label}' ถูกเปลี่ยนเป็น {state}")
-    return redirect("custom_dimension")
-
-
-def custom_count(request):
-
-    counts_qs = GenerateCount.objects.all().order_by("id")
-    
-    paginator = Paginator(counts_qs, 5)
-    page_number = request.GET.get('page')
-    page_obj = paginator.get_page(page_number)
-    
-    context = {
-        "counts": page_obj,
-        "page_obj": page_obj,
-    }
-    return render(request, "custom_count.html", context)
-
-def add_count(request):
-    if request.method == "POST":
-        value = request.POST.get("value")
-        is_active = request.POST.get("is_active") == "true"
-
-        if not value:
-            messages.error(request, "กรุณากรอก Value")
-            return redirect("custom_count")
-
-        GenerateCount.objects.create(value=value, is_active=is_active)
-        messages.success(request, f"เพิ่ม Count '{value}' สำเร็จแล้ว")
-    return redirect("custom_count")
-
-
-
-
-
-@admin_required
-def dashboard_view(request):
-    """
-    Admin Dashboard: Overview of system statistics.
-    Legacy version with detailed metrics.
-    """
-
-    today = timezone.now().date()
-    
-    # Basic Counters
-    total_users = User.objects.count()
-    total_posts = Post.objects.count()
-    total_comments = Comment.objects.count()
-    total_generated_images = GenerateHistory.objects.count()
-
-    # Activity Monitoring
-    active_users_today = User.objects.filter(last_login__date=today).count()
-    new_users_today = User.objects.filter(date_joined__date=today).count()
-    generated_today = GenerateHistory.objects.filter(created_at__date=today).count()
-    active_models = GenerateModel.objects.filter(is_active=True).count()
-    tags_count = Tag.objects.count()
-
-    # Recent Data
-    recent_users = User.objects.order_by('-date_joined')[:5]
-    recent_images = GenerateHistory.objects.select_related('user').order_by('-created_at')[:5]
-
-    # Model Usage Stats
-    model_usage_data = GenerateHistory.objects.values('model_name').annotate(count=Count('model_name')).order_by('-count')[:5]
-    # Calculate percentages
-    model_usage = []
-    if total_generated_images > 0:
-        for m in model_usage_data:
-            percent = (m['count'] / total_generated_images) * 100
-            model_usage.append({
-                'model_name': m['model_name'],
-                'count': m['count'],
-                'percent': round(percent, 1)
-            })
-
-    # Tag Usage Stats
-    tag_usage = Tag.objects.annotate(count=Count('posts')).order_by('-count')[:5]
-
-    context = {
-        "total_users": total_users,
-        "total_posts": total_posts,
-        "total_comments": total_comments,
-        "total_generated_images": total_generated_images,
-        "active_users_today": active_users_today,
-        "new_users_today": new_users_today,
-        "generated_today": generated_today,
-        "active_models": active_models,
-        "tags_count": tags_count,
-        "recent_users": recent_users,
-        "recent_images": recent_images,
-        "model_usage": model_usage,
-        "tag_usage": tag_usage,
-    }
-    return render(request, "dashboard.html", context)
-
-# ==========================================
-# 3.6 จัดการเนื้อหา (Content Management)
-# ==========================================
-
-@admin_required
-def admin_post_list(request):
-    posts = Post.objects.select_related('user').order_by('-created_at')
-    rows = []
-    for p in posts:
-        # Create row data
-        image_html = f'<img src="{p.history.image_url}" class="w-10 h-10 object-cover rounded">' if p.history and p.history.image_url else "-"
-        rows.append({
-            'id': p.id,
-            'data': [
-                image_html,
-                p.title or "(No Title)",
-                p.user.username,
-                p.created_at.strftime("%Y-%m-%d %H:%M")
-            ]
-        })
-    
-    return render(request, "admin_data_list.html", {
-        "title": "Manage Posts",
-        "headers": ["Image", "Title", "Owner", "Created At"],
-        "rows": rows,
-        "delete_url_name": "admin_delete_post"
-    })
-
-@admin_required
-@require_POST
-def admin_delete_post(request, pk):
-    post = get_object_or_404(Post, pk=pk)
-    post.delete()
-    messages.success(request, "Post deleted successfully.")
-    return redirect('admin_post_list')
-
-@admin_required
-def admin_comment_list(request):
-    comments = Comment.objects.select_related('user', 'post').order_by('-created_at')
-    rows = []
-    for c in comments:
-        rows.append({
-            'id': c.id,
-            'data': [
-                c.text[:50] + "..." if len(c.text) > 50 else c.text,
-                c.user.username,
-                f"Post #{c.post.id}",
-                c.created_at.strftime("%Y-%m-%d %H:%M")
-            ]
-        })
-    
-    return render(request, "admin_data_list.html", {
-        "title": "Manage Comments",
-        "headers": ["Comment", "User", "Post", "Date"],
-        "rows": rows,
-        "delete_url_name": "admin_delete_comment"
-    })
-
-@admin_required
-@require_POST
-def admin_delete_comment(request, pk):
-    comment = get_object_or_404(Comment, pk=pk)
-    comment.delete()
-    messages.success(request, "Comment deleted successfully.")
-    return redirect('admin_comment_list')
-
-@admin_required
-def admin_image_list(request):
-
-    filter_type = request.GET.get('filter')
-    today = timezone.now().date()
-    
-    if filter_type == 'today':
-        images = GenerateHistory.objects.filter(created_at__date=today).select_related('user').order_by('-created_at')
-        title = f"ภาพที่สร้างวันนี้ (Today: {today})"
-    else:
-        images = GenerateHistory.objects.select_related('user').order_by('-created_at')
-        title = "จัดการรูปภาพที่สร้าง (All Generated Images)"
-    rows = []
-    for img in images:
-        image_html = f'<img src="{img.image_url}" class="w-10 h-10 object-cover rounded">'
-        rows.append({
-            'id': img.id,
-            'data': [
-                image_html,
-                img.positive_prompt[:50] + "...",
-                img.user.username,
-                img.model_name
-            ]
-        })
-    
-    return render(request, "admin_data_list.html", {
-        "title": title,
-        "headers": ["Image", "Prompt", "User", "Model"],
-        "rows": rows,
-        "delete_url_name": "admin_delete_image"
-    })
-
-@admin_required
-@require_POST
-def admin_delete_image(request, pk):
-    img = get_object_or_404(GenerateHistory, pk=pk)
-    img.delete()
-    messages.success(request, "Image history deleted successfully.")
-    return redirect('admin_image_list')
-
-@admin_required
-def admin_tag_list(request):
-
-    
-    sort_param = request.GET.get('sort')
-    tags_qs = Tag.objects.annotate(usage_count=Count('posts'))
-    
-    if sort_param == 'usage_asc':
-        tags_qs = tags_qs.order_by('usage_count')
-    elif sort_param == 'usage_desc':
-        tags_qs = tags_qs.order_by('-usage_count')
-    else:
-        tags_qs = tags_qs.order_by('category', 'name')
-        
-    paginator = Paginator(tags_qs, 5)
-    page_number = request.GET.get('page')
-    page_obj = paginator.get_page(page_number)
-    
-    context = {
-        "tags": page_obj,
-        "page_obj": page_obj,
-        "current_sort": sort_param
-    }
-    return render(request, "admin_tag_list.html", context)
-
-@admin_required
-@require_POST
-def admin_add_tag(request):
-    name = request.POST.get("name")
-    category = request.POST.get("category", "Uncategorized")
-    
-    if name:
-        name = name[:100]
-        category = category[:100]
-        Tag.objects.create(name=name, category=category)
-        messages.success(request, f"เพิ่ม Tag '{name}' สำเร็จแล้ว")
-    else:
-        messages.error(request, "กรุณาระบุชื่อ Tag")
-        
-    return redirect("admin_tag_list")
-
-@admin_required
-@require_POST
-def admin_edit_tag(request, pk):
-    tag = get_object_or_404(Tag, pk=pk)
-    name = request.POST.get("name")
-    category = request.POST.get("category", "Uncategorized")
-    
-    if name:
-        tag.name = name[:100]
-        tag.category = category[:100]
-        tag.save()
-        messages.success(request, f"แก้ไข Tag '{name}' สำเร็จแล้ว")
-    else:
-        messages.error(request, "กรุณาระบุชื่อ Tag")
-        
-    return redirect("admin_tag_list")
-
-@admin_required
-@require_POST
-def admin_delete_tag(request, pk):
-    tag = get_object_or_404(Tag, pk=pk)
-    tag.delete()
-    messages.success(request, "Tag deleted successfully.")
-    return redirect('admin_tag_list')
-
-
-
 
